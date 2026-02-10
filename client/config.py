@@ -4,20 +4,33 @@ import platform
 import subprocess
 
 class Config:
-    API_BASE_URL = "https://unintruding-nehemiah-imputative.ngrok-free.dev/api/v1"
+    # API_BASE_URL = "https://unintruding-nehemiah-imputative.ngrok-free.dev/api/v1"
+    API_BASE_URL = "http://localhost:8001/api/v1"
     TOKEN_FILE = "client_token.key"
     
     @staticmethod
     def get_device_id():
-        # Try to get UUID from WMIC
         try:
-             output = subprocess.check_output('wmic csproduct get uuid', shell=True)
-             return output.decode().split('\n')[1].strip()
-        except:
-             # Fallback to a generated/stored UUID or MAC address if WMIC fails
-             # For MVP, let's use a persistent file method or mac address
-             # Simple fallback:
-             return str(uuid.getnode())
+            # Use wmic but handle encoding and potential multiple lines
+            output = subprocess.check_output('wmic csproduct get uuid', shell=True)
+            # Try different decodings to be safe on Windows
+            try:
+                decoded = output.decode('utf-8')
+            except:
+                decoded = output.decode('cp1252', errors='ignore')
+            
+            lines = [l.strip() for l in decoded.split('\n') if l.strip()]
+            if len(lines) > 1:
+                # UUID is usually the second line (index 1) after the header 'UUID'
+                uuid_str = lines[1]
+                # Final check: remove any non-alphanumeric characters except hyphens
+                import re
+                uuid_str = re.sub(r'[^a-zA-Z0-9-]', '', uuid_str)
+                return uuid_str
+            return platform.node() # Fallback to hostname
+        except Exception:
+            # Fallback to MAC address based UUID
+            return str(uuid.getnode())
 
     @staticmethod
     def get_device_name():
