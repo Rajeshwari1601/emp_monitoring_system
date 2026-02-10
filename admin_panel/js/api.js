@@ -1,7 +1,7 @@
 class APIClient {
     constructor() {
-        self.baseUrl = "http://localhost:8000/api/v1";
-        self.token = localStorage.getItem('access_token');
+        this.baseUrl = "http://localhost:8001/api/v1";
+        this.token = localStorage.getItem('access_token');
     }
 
     async request(endpoint, method = 'GET', body = null) {
@@ -24,7 +24,8 @@ class APIClient {
         }
 
         try {
-            const response = await fetch(`${self.baseUrl}${endpoint}`, config);
+            // Fix: Use this.baseUrl
+            const response = await fetch(`${this.baseUrl}${endpoint}`, config);
 
             if (response.status === 401) {
                 // Token expired or invalid
@@ -35,12 +36,21 @@ class APIClient {
                 throw new Error("Unauthorized");
             }
 
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.detail || 'Request failed');
+            // Handle text/plain 500s or JSON errors
+            let data;
+            const contentType = response.headers.get("content-type");
+            if (contentType && contentType.indexOf("application/json") !== -1) {
+                data = await response.json();
+            } else {
+                data = { detail: await response.text() };
             }
 
-            return await response.json();
+            if (!response.ok) {
+                const errorMessage = typeof data.detail === 'object' ? JSON.stringify(data.detail) : (data.detail || 'Request failed');
+                throw new Error(errorMessage);
+            }
+
+            return data;
         } catch (error) {
             throw error;
         }
@@ -50,10 +60,14 @@ class APIClient {
         // We use the same login endpoint but admin must have superuser status. 
         // Backend currently doesn't separate endpoints, but returns user object.
         // We will check user role after login or let backend handle permissions on subsequent calls.
-        const response = await fetch(`${self.baseUrl}/auth/login`, {
+        const response = await fetch(`${this.baseUrl}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password, device_id: 'ADMIN_CONSOLE' })
+            body: JSON.stringify({
+                email: email,
+                password: password,
+                device_id: 'ADMIN_CONSOLE'
+            })
         });
 
         if (!response.ok) return false;
@@ -62,7 +76,7 @@ class APIClient {
         // Check if user is actually admin in response? 
         // For MVP we just store token. If they aren't admin, subsequent API calls will fail (403/400).
         localStorage.setItem('access_token', data.access_token);
-        localStorage.setItem('admin_name', data.user.name);
+        localStorage.setItem('admin_name', data.user ? data.user.name : 'Admin');
         return true;
     }
 

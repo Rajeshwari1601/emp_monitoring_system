@@ -14,12 +14,76 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('logoutBtn').addEventListener('click', () => api.logout());
     document.getElementById('refreshUsersBtn').addEventListener('click', loadDashboard);
+
+    initCharts();
 });
 
+function initCharts() {
+    // Pie Chart: Applications Usage
+    const ctxPie = document.getElementById('appsChart').getContext('2d');
+    new Chart(ctxPie, {
+        type: 'doughnut',
+        data: {
+            labels: ['Chrome', 'Word', 'Slack', 'Others'],
+            datasets: [{
+                data: [45, 25, 20, 10],
+                backgroundColor: [
+                    '#ef4444', // Red (Chrome)
+                    '#8b5cf6', // Purple (Word)
+                    '#3b82f6', // Blue (Slack)
+                    '#1f2937'  // Dark (Others)
+                ],
+                borderWidth: 0,
+                hoverOffset: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right',
+                    labels: { boxWidth: 10, font: { size: 10 } }
+                }
+            },
+            cutout: '70%'
+        }
+    });
+
+    // Bar Chart: Weekly Active Hours
+    const ctxBar = document.getElementById('hoursChart').getContext('2d');
+    new Chart(ctxBar, {
+        type: 'bar',
+        data: {
+            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+            datasets: [{
+                label: 'Hours',
+                data: [6, 8, 7, 5, 8],
+                backgroundColor: '#3b82f6',
+                borderRadius: 4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, grid: { display: false }, ticks: { display: false } },
+                x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
 async function checkAuth() {
-    if (!localStorage.getItem('access_token')) {
+    const token = localStorage.getItem('access_token');
+    if (!token) {
         window.location.href = 'login.html';
+        return;
     }
+    // Optional: Verify token validity with backend here if needed
 }
 
 async function loadDashboard() {
@@ -37,8 +101,20 @@ async function loadDashboard() {
 }
 
 function updateStats(onlineCount, totalCount) {
-    document.getElementById('statOnlineUsers').textContent = onlineCount;
-    document.getElementById('statTotalUsers').textContent = totalCount;
+    const offlineCount = Math.max(0, totalCount - onlineCount);
+
+    // Sidebar Stats
+    const totalEl = document.getElementById('totalUserCount');
+    if (totalEl) totalEl.textContent = totalCount;
+
+    const onlineEl = document.getElementById('sidebarOnlineCount');
+    if (onlineEl) onlineEl.textContent = onlineCount;
+
+    const offlineEl = document.getElementById('sidebarOfflineCount');
+    if (offlineEl) offlineEl.textContent = offlineCount;
+
+    // Detail View Stats (if user selected)
+    // Here we might fetch specific details later
 }
 
 function renderUserList(allUsers, onlineUsers) {
@@ -50,23 +126,24 @@ function renderUserList(allUsers, onlineUsers) {
     allUsers.forEach(user => {
         const isOnline = onlineIds.has(user.id);
         const el = document.createElement('div');
-        el.className = `p-3 rounded-lg cursor-pointer transition flex items-center justify-between group ${currentUserId === user.id ? 'bg-blue-600/20 border border-blue-500/50' : 'bg-gray-700/50 hover:bg-gray-700 border border-transparent'}`;
+        // Match Sidebar styling
+        el.className = `px-4 py-3 cursor-pointer text-sm flex items-center justify-between group transition-colors duration-200 ${currentUserId === user.id ? 'bg-slate-800 border-l-4 border-blue-500' : 'hover:bg-slate-800 border-l-4 border-transparent'}`;
         el.onclick = () => selectUser(user, isOnline);
 
         el.innerHTML = `
-            <div class="flex items-center space-x-3">
-                <div class="relative">
-                    <div class="w-10 h-10 rounded-full bg-gray-600 flex items-center justify-center text-lg font-bold text-gray-300">
+            <div class="flex items-center w-full">
+                <div class="relative mr-3">
+                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 border border-slate-600">
                         ${user.name.charAt(0).toUpperCase()}
                     </div>
-                    <div class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-gray-800 ${isOnline ? 'bg-green-500' : 'bg-gray-500'}"></div>
+                    <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-slate-900 ${isOnline ? 'bg-green-500' : 'bg-slate-500'}"></div>
                 </div>
-                <div>
-                    <h4 class="font-medium text-white group-hover:text-blue-400 transition">${user.name}</h4>
-                    <p class="text-xs text-gray-400 truncate w-32">${user.email}</p>
+                <div class="min-w-0 flex-1">
+                    <h4 class="font-medium text-slate-200 truncate group-hover:text-white transition">${user.name}</h4>
+                    <p class="text-xs text-slate-500 truncate">${user.email}</p>
                 </div>
+                <i class="fas fa-chevron-right text-xs text-slate-600 group-hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
             </div>
-            <i class="fas fa-chevron-right text-gray-600 group-hover:text-gray-400 ${currentUserId === user.id ? 'text-blue-400' : ''}"></i>
         `;
         listContainer.appendChild(el);
     });
@@ -77,37 +154,105 @@ function selectUser(user, isOnline) {
 
     // UI Updates
     document.getElementById('noUserSelected').classList.add('hidden');
-    document.getElementById('userControlPanel').classList.remove('hidden');
+    document.getElementById('userDashboard').classList.remove('hidden');
 
-    document.getElementById('selectedUserName').textContent = user.name;
-    document.getElementById('selectedUserDevice').textContent = user.id; // Or device info if available
+    // Header Name
+    const headerName = document.getElementById('selectedUserNameHeader');
+    if (headerName) {
+        headerName.textContent = user.name;
+        headerName.classList.remove('hidden');
+    }
 
-    const statusEl = document.getElementById('selectedUserStatus');
-    statusEl.textContent = isOnline ? 'Online' : 'Offline';
-    statusEl.className = `px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wide ${isOnline ? 'bg-green-500/20 text-green-400 border border-green-500/30' : 'bg-gray-700 text-gray-400'}`;
+    // Detail Stats
+    const statusEl = document.getElementById('detailStatus');
+    if (statusEl) {
+        statusEl.textContent = isOnline ? 'Online' : 'Offline';
+        statusEl.className = isOnline
+            ? 'text-2xl font-extrabold text-green-600 mt-0.5'
+            : 'text-2xl font-extrabold text-gray-800 mt-0.5';
+    }
 
-    // Highlight in list
-    loadDashboard(); // Re-render list to show selection state
+    // Reset Live Feed
+    updateLiveFeed('reset');
 
-    // Clear logs for new user selection
-    // Load History
-    loadHistory(user.id);
+    // Refresh List to show active state
+    loadDashboard();
+
+    // Clear logs
     clearLogs();
     log(`Selected user: ${user.name}`);
+    loadHistory(user.id);
 }
+
+// ------ Live Feed Management ------
+
+function updateLiveFeed(type, data) {
+    const container = document.getElementById('liveFeedContainer');
+    const placeholder = document.getElementById('feedPlaceholder');
+    const image = document.getElementById('feedImage');
+    const list = document.getElementById('feedList');
+    const loading = document.getElementById('feedLoading');
+    const titleEl = document.getElementById('liveFeedTitle');
+
+    // Hide all first
+    placeholder.classList.add('hidden');
+    image.classList.add('hidden');
+    list.classList.add('hidden');
+    loading.classList.add('hidden');
+
+    if (type === 'reset') {
+        placeholder.classList.remove('hidden');
+        if (titleEl) titleEl.textContent = 'Live Feed';
+        return;
+    }
+
+    if (type === 'loading') {
+        loading.classList.remove('hidden');
+        // Keep previous content visible behind loading overlay? Or just show overlay?
+        // Let's keep placeholder visible if nothing else
+        if (image.src === "" && list.innerHTML === "") placeholder.classList.remove('hidden');
+        return;
+    }
+
+    if (type === 'image') {
+        image.src = data;
+        image.classList.remove('hidden');
+        if (titleEl) titleEl.textContent = 'Remote Screen Capture';
+    } else if (type === 'apps') {
+        list.innerHTML = data.map(app => `<div><span class="text-white">[APP]</span> ${app.name || app}</div>`).join('');
+        list.classList.remove('hidden');
+        if (titleEl) titleEl.textContent = 'Running Applications';
+    } else if (type === 'browser') {
+        const status = `Browser: ${data.browser} | YouTube: ${data.youtube_open ? 'OPEN' : 'CLOSED'}`;
+        list.innerHTML = `<div class="text-lg text-center mt-10">${status}</div>`;
+        list.classList.remove('hidden');
+        if (titleEl) titleEl.textContent = 'Browser Activity Monitoring';
+    }
+}
+
 
 async function triggerCommand(commandType) {
     if (!currentUserId) return;
 
+    // Update Title for Immediate Feedback
+    const titleEl = document.getElementById('liveFeedTitle');
+    if (titleEl) {
+        if (commandType === 'TAKE_SCREENSHOT') titleEl.textContent = 'Requesting Screenshot...';
+        if (commandType === 'GET_RUNNING_APPS') titleEl.textContent = 'Fetching Running Apps...';
+        if (commandType === 'GET_BROWSER_STATUS') titleEl.textContent = 'Checking Browser Activity...';
+    }
+
+    updateLiveFeed('loading');
     log(`Sending command: ${commandType}...`);
+
     try {
         const res = await api.sendCommand(currentUserId, commandType);
         log(`Command SENT. ID: ${res.command_id}`, 'success');
-
         pollForCommandResult(res.command_id, commandType, currentUserId);
 
     } catch (err) {
         log(`Failed to send command: ${err.message}`, 'error');
+        updateLiveFeed('reset');
     }
 }
 
@@ -115,128 +260,77 @@ async function pollForCommandResult(commandId, type, userId) {
     let attempts = 0;
     const maxAttempts = 15; // 30 seconds
 
-    const interval = setInterval(async () => {
+    if (commandPollInterval) clearInterval(commandPollInterval);
+
+    commandPollInterval = setInterval(async () => {
         attempts++;
         if (attempts > maxAttempts) {
-            clearInterval(interval);
+            clearInterval(commandPollInterval);
             log(`Timeout waiting for ${type} result.`, 'warning');
+            updateLiveFeed('reset');
             return;
         }
 
         try {
             if (type === 'TAKE_SCREENSHOT') {
                 const res = await api.getScreenshot(commandId);
-                // If 404, it throws error and goes to catch block.
-                // If success:
                 if (res.url) {
-                    clearInterval(interval);
+                    clearInterval(commandPollInterval);
                     log(`Screenshot received!`, 'success');
-                    showScreenshot(res.url);
+                    updateLiveFeed('image', res.url);
+
+                    // Also update stats card
+                    const countEl = document.getElementById('detailScreenshots');
+                    if (countEl) countEl.textContent = parseInt(countEl.textContent || 0) + 1;
                 }
             } else if (type === 'GET_RUNNING_APPS') {
-                // Check if command is executed? Or just check apps log?
-                // Let's check apps log and see if it's new?
-                // Simpler: Just check Command History to see if status is EXECUTED, 
-                // then fetch data.
                 const history = await api.getCommandHistory(userId);
                 const cmd = history.find(c => c.id === commandId);
                 if (cmd && cmd.status === 'EXECUTED') {
-                    clearInterval(interval);
+                    clearInterval(commandPollInterval);
                     const appsData = await api.getApps(userId);
                     log(`Apps received: ${appsData.apps.length} running.`, 'success');
-                    console.log(appsData.apps); // For debug
-                    // Show in modal or log? Log detailed
-                    const top5 = appsData.apps.slice(0, 5).map(a => a.name).join(', ');
-                    log(`Top Apps: ${top5}...`, 'info');
+                    updateLiveFeed('apps', appsData.apps);
+
+                    // Update stats card
+                    const appEl = document.getElementById('detailApp');
+                    if (appEl && appsData.apps.length > 0) {
+                        appEl.textContent = appsData.apps[0].name || appsData.apps[0];
+                        appEl.title = appsData.apps[0].name || appsData.apps[0];
+                    }
                 } else if (cmd && cmd.status === 'FAILED') {
-                    clearInterval(interval);
+                    clearInterval(commandPollInterval);
                     log('Command FAILED on client.', 'error');
+                    updateLiveFeed('reset');
                 }
             } else if (type === 'GET_BROWSER_STATUS') {
                 const history = await api.getCommandHistory(userId);
                 const cmd = history.find(c => c.id === commandId);
                 if (cmd && cmd.status === 'EXECUTED') {
-                    clearInterval(interval);
+                    clearInterval(commandPollInterval);
                     const browserData = await api.getBrowser(userId);
-                    log(`Browser: ${browserData.browser} (YT: ${browserData.youtube_open})`, 'success');
+                    log(`Browser: ${browserData.browser}`, 'success');
+                    updateLiveFeed('browser', browserData);
                 }
             }
         } catch (e) {
-            // Ignore errors (like 404) while polling
+            // Ignore errors while polling
+            console.log("Polling error:", e);
         }
 
     }, 2000);
 }
 
-function showScreenshot(url) {
-    const img = document.getElementById('screenshotPreview');
-    img.src = url;
-    // Reset zoom state
-    img.className = "max-w-full max-h-full object-contain cursor-zoom-in transition-transform duration-300 ease-in-out shadow-2xl";
-
-    document.getElementById('downloadLink').href = url;
-    document.getElementById('screenshotModal').classList.remove('hidden');
-}
-
-function toggleZoom(img) {
-    if (img.classList.contains('cursor-zoom-in')) {
-        // Zoom In
-        img.classList.remove('max-w-full', 'max-h-full', 'object-contain', 'cursor-zoom-in');
-        img.classList.add('cursor-zoom-out', 'scale-150'); // Simple scale or remove constraints
-        // Actually removing max constraints allows natural size. 
-        // Let's rely on remove max-*
-    } else {
-        // Zoom Out
-        img.classList.add('max-w-full', 'max-h-full', 'object-contain', 'cursor-zoom-in');
-        img.classList.remove('cursor-zoom-out', 'scale-150');
-    }
-}
-
-function closeModal() {
-    document.getElementById('screenshotModal').classList.add('hidden');
-}
-
-async function loadHistory(userId) {
-    try {
-        const history = await api.getCommandHistory(userId);
-        // We could render this... for now just log latest
-        if (history.length > 0) {
-            const last = history[0];
-            document.getElementById('selectedUserLastSeen').textContent = `Last Command: ${last.command} (${last.status})`;
-        }
-    } catch (e) { }
-}
-
-
-// ------ Logs & Helper UI ------
-
-function log(msg, type = 'info') {
-    const logContainer = document.getElementById('outputLog');
-    const el = document.createElement('div');
-    el.className = 'font-mono text-xs py-1 border-b border-gray-800 last:border-0';
-
-    const time = new Date().toLocaleTimeString();
-    let colorClass = 'text-gray-400';
-    if (type === 'success') colorClass = 'text-green-400';
-    if (type === 'error') colorClass = 'text-red-400';
-    if (type === 'warning') colorClass = 'text-yellow-400';
-
-    el.innerHTML = `<span class="text-gray-600 mr-2">[${time}]</span> <span class="${colorClass}">${msg}</span>`;
-    logContainer.prepend(el);
-}
-
-function clearLogs() {
-    document.getElementById('outputLog').innerHTML = '';
-}
-
-// ------ Modals ------
+// ------ Modals & Helpers ------
 
 function showNotifyModal() {
     if (!currentUserId) return;
     document.getElementById('notifyModal').classList.remove('hidden');
 }
 
-function closeNotifyModal() {
+function closeNotifyModal() { // Renamed to match HTML call? Wait, HTML calls document.getElementById... hidden.
+    // HTML uses: onclick="document.getElementById('notifyModal').classList.add('hidden')"
+    // But let's keep this clean
     document.getElementById('notifyModal').classList.add('hidden');
 }
 
@@ -249,8 +343,62 @@ async function sendNotification() {
     try {
         await api.sendNotification(currentUserId, title, msg);
         log(`Notification sent: "${title}"`, 'success');
-        closeNotifyModal();
+        document.getElementById('notifyModal').classList.add('hidden');
     } catch (err) {
         log(`Failed to send notification: ${err.message}`, 'error');
     }
 }
+
+// Modal closing logic is partly in HTML onclicks, keeping consistent
+function closeModal() {
+    document.getElementById('screenshotModal').classList.add('hidden');
+}
+
+// Logs
+function log(msg, type = 'info') {
+    const logContainer = document.getElementById('commandLogTable'); // This is a table body in restored HTML?
+    // Wait, HTML has <tbody id="commandLogTable">
+    // Previous app.js was targeting outputLog div.
+    // Restored HTML (Line 231): <tbody id="commandLogTable" class="divide-y divide-gray-50"></tbody>
+
+    if (!logContainer) return;
+
+    const row = document.createElement('tr');
+    const time = new Date().toLocaleTimeString();
+
+    let statusColor = 'text-gray-500';
+    if (type === 'success') statusColor = 'text-green-500 font-bold';
+    if (type === 'error') statusColor = 'text-red-500 font-bold';
+    if (type === 'warning') statusColor = 'text-yellow-500';
+
+    row.innerHTML = `
+        <td class="p-2 text-gray-700 font-medium">${msg}</td>
+        <td class="p-2 ${statusColor} text-xs uppercase">${type}</td>
+        <td class="p-2 text-right text-gray-400 text-xs">${time}</td>
+    `;
+
+    logContainer.prepend(row);
+}
+
+function clearLogs() {
+    const logContainer = document.getElementById('commandLogTable');
+    if (logContainer) logContainer.innerHTML = '';
+}
+
+async function loadHistory(userId) {
+    // Optional: Load persistent history from API
+}
+
+function toggleNavDrawer() {
+    const drawer = document.getElementById('navDrawer');
+    const overlay = document.getElementById('navOverlay');
+
+    if (drawer.classList.contains('translate-x-full')) {
+        drawer.classList.remove('translate-x-full');
+        overlay.classList.remove('hidden');
+    } else {
+        drawer.classList.add('translate-x-full');
+        overlay.classList.add('hidden');
+    }
+}
+
