@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Login - Monitor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 flex items-center justify-center h-screen">
+
+    <div class="bg-gray-800 p-8 rounded-lg shadow-lg w-96">
+        <h1 class="text-3xl font-bold text-white mb-6 text-center">Admin Access</h1>
+        
+        <form id="loginForm" class="space-y-4">
+            <div>
+                <label class="block text-gray-400 mb-1">Email</label>
+                <input type="email" id="email" class="w-full bg-gray-700 text-white rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            </div>
+            
+            <div>
+                <label class="block text-gray-400 mb-1">Password</label>
+                <input type="password" id="password" class="w-full bg-gray-700 text-white rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+            </div>
+            
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-200">
+                Login
+            </button>
+        </form>
+        <p id="errorMsg" class="text-red-500 text-center mt-4 hidden"></p>
+    </div>
+
+    <script src="js/api.js"></script>
+    <script>
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const errorMsg = document.getElementById('errorMsg');
+
+            try {
+                const api = new APIClient();
+                const success = await api.login(email, password, "ADMIN_CONSOLE"); 
+                if (success) {
+                    window.location.href = 'index.html';
+                } else {
+                    errorMsg.textContent = "Invalid credentials";
+                    errorMsg.classList.remove('hidden');
+                }
+            } catch (err) {
+                console.error(err);
+                errorMsg.textContent = "Login failed: " + err.message;
+                errorMsg.classList.remove('hidden');
+            }
+        });
+    </script>
+</body>
+</html>
