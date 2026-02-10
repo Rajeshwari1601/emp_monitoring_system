@@ -1,0 +1,7 @@
+requests
+pillow
+psutil
+wmi
+pyautogui
+pywin32
+tk
