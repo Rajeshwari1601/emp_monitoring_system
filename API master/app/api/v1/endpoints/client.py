@@ -87,6 +87,26 @@ def upload_screenshot(
     db.add(shot)
     db.commit()
     
+    # Cleanup old auto-screenshots if this is an auto-screenshot
+    if screenshot_in.is_auto:
+        # Keep only the last 10 auto-screenshots (where command_id is None)
+        old_screenshots = db.query(Screenshot).filter(
+            Screenshot.user_id == current_user.id,
+            Screenshot.command_id == None
+        ).order_by(Screenshot.created_at.desc()).offset(10).all()
+        
+        for old_shot in old_screenshots:
+            # Delete file if exists
+            if old_shot.file_path and os.path.exists(old_shot.file_path):
+                try:
+                    os.remove(old_shot.file_path)
+                except:
+                    pass
+            db.delete(old_shot)
+        
+        if old_screenshots:
+            db.commit()
+    
     return {"success": True, "screenshot_url": real_url}
 
 @router.post("/apps/upload", response_model=dict)

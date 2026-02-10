@@ -1,4 +1,6 @@
 from typing import Any, List
+import base64
+import os
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.api import deps
@@ -94,7 +96,49 @@ def get_screenshot(
     shot = db.query(Screenshot).filter(Screenshot.command_id == command_id).first()
     if not shot:
         raise HTTPException(status_code=404, detail="Screenshot not found")
-    return {"url": shot.url, "created_at": shot.created_at}
+    image_data = None
+    if shot.file_path and os.path.exists(shot.file_path):
+        try:
+            with open(shot.file_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                image_data = f"data:image/png;base64,{encoded_string}"
+        except Exception as e:
+            print(f"Error reading image file: {e}")
+
+    return {"url": shot.url, "created_at": shot.created_at, "image_data": image_data}
+
+@router.get("/screenshot/latest/{user_id}")
+def get_latest_screenshot(
+    user_id: str,
+    current_user: User = Depends(deps.get_current_active_superuser),
+    db: Session = Depends(deps.get_db)
+) -> Any:
+    """Get the most recent screenshot for a user (prioritizes auto-screenshots)"""
+    
+    # Get the latest screenshot (auto-screenshots have command_id = None)
+    shot = db.query(Screenshot).filter(
+        Screenshot.user_id == user_id
+    ).order_by(Screenshot.created_at.desc()).first()
+    
+    if not shot:
+        raise HTTPException(status_code=404, detail="No screenshots found for this user")
+    
+    # Load image as base64 for display
+    image_data = None
+    if shot.file_path and os.path.exists(shot.file_path):
+        try:
+            with open(shot.file_path, "rb") as image_file:
+                encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+                image_data = f"data:image/png;base64,{encoded_string}"
+        except Exception as e:
+            print(f"Error reading image file: {e}")
+    
+    return {
+        "url": shot.url,
+        "created_at": shot.created_at,
+        "image_data": image_data,
+        "is_auto": shot.command_id is None
+    }
 
 @router.get("/apps/{user_id}")
 def get_user_apps(

