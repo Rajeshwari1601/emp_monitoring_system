@@ -6,3 +6,7 @@ __pycache__/
 # Env & secrets
 .env
 *.key
+
+# Data
+API master/static/
+static/
