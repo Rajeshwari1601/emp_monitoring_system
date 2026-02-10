@@ -187,13 +187,22 @@
                             <i class="fas fa-video-slash text-4xl mb-3 opacity-50"></i>
                             <p class="text-sm">Action Output Display</p>
                         </div>
-                        <img id="feedImage" class="hidden max-w-full max-h-full object-contain" src="" alt="Live Feed">
+                        <img id="feedImage"
+                            style="display:none; max-width: 100%; max-height: 100%; object-fit: contain;" src=""
+                            alt="Live Feed">
                         <div id="feedList"
                             class="hidden w-full h-full p-4 text-green-400 font-mono text-xs overflow-auto"></div>
                         <div id="feedLoading"
                             class="hidden absolute inset-0 bg-black/80 flex flex-col items-center justify-center z-10">
                             <i class="fas fa-circle-notch fa-spin text-3xl text-blue-500 mb-2"></i>
                         </div>
+
+                        <!-- Fullscreen Expand Button -->
+                        <button id="expandScreenshotBtn" onclick="expandScreenshot()"
+                            class="hidden absolute bottom-4 right-4 w-12 h-12 bg-gray-900/80 hover:bg-blue-600 text-white rounded-lg shadow-lg hover:shadow-xl transition-all duration-300 flex items-center justify-center group border border-gray-700 hover:border-blue-500 z-20"
+                            title="View Fullscreen">
+                            <i class="fas fa-expand text-lg group-hover:scale-110 transition-transform"></i>
+                        </button>
                     </div>
                 </div>
             </div>

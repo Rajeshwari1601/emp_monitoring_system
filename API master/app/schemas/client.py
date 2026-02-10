@@ -36,6 +36,7 @@ class CommandSchema(BaseModel):
 class ScreenshotUpload(BaseModel):
     command_id: Optional[str]
     image_base64: str
+    is_auto: Optional[bool] = False
 
 class ScreenshotResponse(BaseModel):
     success: bool

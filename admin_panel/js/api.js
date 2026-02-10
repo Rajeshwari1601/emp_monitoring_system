@@ -1,6 +1,6 @@
 class APIClient {
     constructor() {
-        this.baseUrl = "http://localhost:8001/api/v1";
+        this.baseUrl = "http://localhost:8000/api/v1";
         this.token = localStorage.getItem('access_token');
     }
 
@@ -124,6 +124,10 @@ class APIClient {
 
     async getCommandHistory(userId) {
         return this.request(`/admin/commands?user_id=${userId}`);
+    }
+
+    async getLatestScreenshot(userId) {
+        return this.request(`/admin/screenshot/latest/${userId}`);
     }
 
     logout() {
