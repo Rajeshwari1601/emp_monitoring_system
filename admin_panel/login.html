@@ -1,57 +1,171 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Admin Login - Monitor</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
-<body class="bg-gray-900 flex items-center justify-center h-screen">
 
-    <div class="bg-gray-800 p-8 rounded-lg shadow-lg w-96">
-        <h1 class="text-3xl font-bold text-white mb-6 text-center">Admin Access</h1>
-        
-        <form id="loginForm" class="space-y-4">
-            <div>
-                <label class="block text-gray-400 mb-1">Email</label>
-                <input type="email" id="email" class="w-full bg-gray-700 text-white rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+<body class="bg-gray-900 flex items-center justify-center h-screen relative overflow-hidden">
+
+    <!-- Background Elements -->
+    <div class="absolute top-0 left-0 w-full h-full overflow-hidden z-0">
+        <div class="absolute top-1/4 left-1/4 w-96 h-96 bg-blue-600/10 rounded-full blur-3xl animate-pulse"></div>
+        <div class="absolute bottom-1/4 right-1/4 w-96 h-96 bg-indigo-600/10 rounded-full blur-3xl animate-pulse"
+            style="animation-delay: 2s;"></div>
+    </div>
+
+    <!-- Login Card -->
+    <div
+        class="bg-gray-800/80 backdrop-blur-md p-8 rounded-2xl shadow-2xl w-full max-w-md border border-gray-700 z-10 relative">
+        <div class="text-center mb-8">
+            <div
+                class="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 mb-4 shadow-lg shadow-blue-500/30">
+                <i class="fas fa-user-shield text-2xl text-white"></i>
             </div>
-            
+            <h1 class="text-2xl font-bold text-white tracking-wide">Admin Access</h1>
+            <p class="text-gray-400 text-sm mt-2">Sign in to manage your monitoring dashboard</p>
+        </div>
+
+        <form id="loginForm" class="space-y-6">
             <div>
-                <label class="block text-gray-400 mb-1">Password</label>
-                <input type="password" id="password" class="w-full bg-gray-700 text-white rounded p-2 focus:outline-none focus:ring-2 focus:ring-blue-500" required>
+                <label class="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Email Address</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
+                        <i class="fas fa-envelope"></i>
+                    </span>
+                    <input type="email" id="email"
+                        class="w-full bg-gray-900/50 text-white rounded-lg pl-10 pr-4 py-3 border border-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                        placeholder="admin@example.com" required>
+                </div>
             </div>
-            
-            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded transition duration-200">
-                Login
+
+            <div>
+                <label class="block text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Password</label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
+                        <i class="fas fa-lock"></i>
+                    </span>
+                    <input type="password" id="password"
+                        class="w-full bg-gray-900/50 text-white rounded-lg pl-10 pr-4 py-3 border border-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-colors"
+                        placeholder="••••••••" required>
+                </div>
+            </div>
+
+            <button type="submit"
+                class="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-3.5 px-4 rounded-lg shadow-lg shadow-blue-600/20 transform hover:-translate-y-0.5 transition-all duration-200">
+                Sign In
             </button>
         </form>
-        <p id="errorMsg" class="text-red-500 text-center mt-4 hidden"></p>
+
+        <div id="errorContainer"
+            class="hidden mt-6 bg-red-500/10 border border-red-500/20 rounded-lg p-3 flex items-start space-x-3">
+            <i class="fas fa-exclamation-circle text-red-400 mt-0.5"></i>
+            <p id="errorMsg" class="text-sm text-red-400 flex-1"></p>
+        </div>
+
+        <div class="mt-8 text-center">
+            <p class="text-xs text-gray-500">
+                Protected by secure monitoring system v1.0
+            </p>
+        </div>
     </div>
 
     <script src="js/api.js"></script>
     <script>
+        // Use the API client from api.js but create a simplified version if needed or just use fetch
+        // Since we import api.js, we should use it if possible, but let's check if APIClient is globally available.
+        // Assuming api.js defines APIClient class globally.
+
         document.getElementById('loginForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('email').value;
             const password = document.getElementById('password').value;
+            const errorContainer = document.getElementById('errorContainer');
             const errorMsg = document.getElementById('errorMsg');
+            const btn = e.target.querySelector('button');
+            const originalBtnText = btn.innerHTML;
+
+            // Simple validation
+            if (!email || !password) return;
+
+            // Loading state
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Signing In...';
+            btn.disabled = true;
+            errorContainer.classList.add('hidden');
 
             try {
-                const api = new APIClient();
-                const success = await api.login(email, password, "ADMIN_CONSOLE"); 
-                if (success) {
+                // We'll manually call login to handle custom error display easily
+                // Or use APIClient if it exposes what we need. 
+                // Let's rely on fetch for direct control here or instantiate APIClient.
+
+                // Check if APIClient exists
+                if (typeof APIClient === 'undefined') {
+                    throw new Error("API Client not loaded");
+                }
+
+                // const api = new APIClient(); // Reuse if needed
+
+                // Note: APIClient might need to be instantiated differently if it takes args?
+                // Checking previous code: const api = new APIClient(); -> seems fine.
+
+                // However, api.login might handle saving token.
+                // Let's implement a direct fetch to be safe and clear.
+                const API_URL = 'http://localhost:8001/api/v1'; // Hardcoded for this specific login file or use config
+
+                const response = await fetch(`${API_URL}/auth/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        email: email,
+                        password: password,
+                        device_id: 'ADMIN_CONSOLE'
+                    })
+                });
+
+                let data;
+                const contentType = response.headers.get("content-type");
+                if (contentType && contentType.indexOf("application/json") !== -1) {
+                    data = await response.json();
+                } else {
+                    data = { detail: await response.text() }; // Handle non-JSON 500s
+                }
+
+                if (!response.ok) {
+                    let errorMessage = 'Invalid credentials';
+                    if (data.detail) {
+                        errorMessage = typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail;
+                    }
+                    throw new Error(errorMessage);
+                }
+
+                if (data.access_token) {
+                    localStorage.setItem('access_token', data.access_token);
+                    // Redirect
                     window.location.href = 'index.html';
                 } else {
-                    errorMsg.textContent = "Invalid credentials";
-                    errorMsg.classList.remove('hidden');
+                    throw new Error("No access token received");
                 }
+
             } catch (err) {
                 console.error(err);
-                errorMsg.textContent = "Login failed: " + err.message;
-                errorMsg.classList.remove('hidden');
+                errorMsg.textContent = err.message;
+                errorContainer.classList.remove('hidden');
+
+                // Shake animation
+                const card = document.querySelector('.bg-gray-800\\/80');
+                card.classList.add('animate-pulse'); // Simple visual cue
+                setTimeout(() => card.classList.remove('animate-pulse'), 500);
+
+            } finally {
+                btn.innerHTML = originalBtnText;
+                btn.disabled = false;
             }
         });
     </script>
 </body>
+
 </html>
