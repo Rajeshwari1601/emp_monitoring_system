@@ -5,3 +5,4 @@ wmi
 pyautogui
 pywin32
 tk
+uiautomation

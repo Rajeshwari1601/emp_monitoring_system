@@ -5,7 +5,7 @@ import subprocess
 
 class Config:
     # API_BASE_URL = "https://unintruding-nehemiah-imputative.ngrok-free.dev/api/v1"
-    API_BASE_URL = "http://localhost:8001/api/v1"
+    API_BASE_URL = "http://localhost:8000/api/v1"
     TOKEN_FILE = "client_token.key"
     
     @staticmethod
@@ -53,3 +53,36 @@ class Config:
     def clear_token():
         if os.path.exists(Config.TOKEN_FILE):
             os.remove(Config.TOKEN_FILE)
+
+class BrowserConfig:
+    MAX_SEARCH_DEPTH = 10
+    UI_SEARCH_TIMEOUT_MS = 500
+    
+    BROWSERS = {
+        'Chrome': {
+            'class_name': 'Chrome_WidgetWin_1',
+            'name_pattern': 'Google Chrome',
+            'suffix': ' - Google Chrome'
+        },
+        'Edge': {
+            'class_name': 'Chrome_WidgetWin_1', # Edge uses same class
+            'name_pattern': 'Microsoft Edge',
+            'suffix': ' - Microsoft Edge'
+        },
+        'Firefox': {
+            'class_name': 'MozillaWindowClass',
+            'name_pattern': 'Firefox',
+            'suffix': ' — Mozilla Firefox'
+        },
+        'Brave': {
+             'class_name': 'Chrome_WidgetWin_1',
+             'name_pattern': 'Brave',
+             'suffix': ' - Brave'
+        }
+    }
+    
+    EXCLUDED_BUTTON_PATTERNS = [
+        'close', 'minimize', 'maximize', 'restore', 'back', 'forward', 'reload', 
+        'home', 'extensions', 'profile', 'menu', 'search', 'side panel', 'tab search'
+    ]
+

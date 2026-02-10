@@ -15,7 +15,7 @@ class Command(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     executed_at = Column(DateTime(timezone=True), nullable=True)
 
-    owner = relationship("app.models.user.User", back_populates="commands")
+    owner = relationship("User", back_populates="commands")
     screenshot = relationship("Screenshot", back_populates="command_rel", uselist=False)
 
 class Screenshot(Base):
@@ -28,7 +28,7 @@ class Screenshot(Base):
     file_path = Column(String, nullable=True) # Local path if stored locally
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    owner = relationship("app.models.user.User", back_populates="screenshots")
+    owner = relationship("User", back_populates="screenshots")
     command_rel = relationship("Command", back_populates="screenshot")
 
 class AppLog(Base):
@@ -40,7 +40,7 @@ class AppLog(Base):
     apps = Column(JSON, nullable=False) # List of running apps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    owner = relationship("app.models.user.User", back_populates="app_logs")
+    owner = relationship("User", back_populates="app_logs")
 
 class BrowserLog(Base):
     __tablename__ = "browser_logs"
@@ -53,4 +53,4 @@ class BrowserLog(Base):
     details = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    owner = relationship("app.models.user.User", back_populates="browser_logs")
+    owner = relationship("User", back_populates="browser_logs")

@@ -1,6 +1,7 @@
 const api = new APIClient();
 let currentUserId = null;
 let commandPollInterval = null;
+let currentBrowserData = null; // Added for browser drill-down
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -219,15 +220,118 @@ function updateLiveFeed(type, data) {
         image.classList.remove('hidden');
         if (titleEl) titleEl.textContent = 'Remote Screen Capture';
     } else if (type === 'apps') {
-        list.innerHTML = data.map(app => `<div><span class="text-white">[APP]</span> ${app.name || app}</div>`).join('');
+        list.innerHTML = `
+            <div class="mb-4 text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-2">Active Processes</div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                ${data.map(app => `
+                    <div class="flex items-center space-x-2 p-2 bg-gray-900/50 rounded border border-gray-800">
+                        <i class="fas fa-microchip text-blue-500 text-[10px]"></i>
+                        <span class="text-xs text-gray-300 truncate">${app.name || app}</span>
+                        <span class="text-[10px] text-gray-600 ml-auto">PID: ${app.pid || 'N/A'}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
         list.classList.remove('hidden');
         if (titleEl) titleEl.textContent = 'Running Applications';
     } else if (type === 'browser') {
-        const status = `Browser: ${data.browser} | YouTube: ${data.youtube_open ? 'OPEN' : 'CLOSED'}`;
-        list.innerHTML = `<div class="text-lg text-center mt-10">${status}</div>`;
+        console.log("DEBUG: Received Browser Data:", data);
+
+        let details = data.details;
+        if (typeof details === 'string') {
+            try { details = JSON.parse(details); } catch (e) { console.error("Parse error:", e); }
+        }
+
+        // Store for interactive navigation
+        currentBrowserData = details;
+
+        renderBrowserList();
+
         list.classList.remove('hidden');
         if (titleEl) titleEl.textContent = 'Browser Activity Monitoring';
     }
+}
+
+/**
+ * Interactive Drill-down: List of Browsers
+ */
+function renderBrowserList() {
+    if (!currentBrowserData) return;
+    const list = document.getElementById('feedList');
+    const sessions = currentBrowserData.sessions || {};
+
+    let html = `
+        <div class="mb-4 text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-2">Detected Browsers</div>
+        <div class="grid grid-cols-1 gap-3">
+    `;
+
+    const browserNames = Object.keys(sessions);
+    if (browserNames.length === 0) {
+        html += `<div class="text-gray-600 italic p-10 text-center">No browsers with detailed tab information detected.</div>`;
+    } else {
+        browserNames.forEach(name => {
+            const count = sessions[name].length;
+            html += `
+                <div onclick="renderTabList('${name}')" class="flex items-center justify-between p-4 bg-gray-900/50 rounded-xl border border-gray-800 hover:border-blue-500 hover:bg-blue-500/5 cursor-pointer transition-all group">
+                    <div class="flex items-center">
+                        <div class="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center mr-4 group-hover:scale-110 transition-transform">
+                            <i class="fab fa-${name.toLowerCase()} text-blue-500 text-lg"></i>
+                        </div>
+                        <div>
+                            <div class="text-sm font-bold text-gray-200 group-hover:text-blue-400 transition-colors uppercase tracking-tight">${name}</div>
+                            <div class="text-[10px] text-gray-500 uppercase tracking-wider">${count} Open Tabs</div>
+                        </div>
+                    </div>
+                    <i class="fas fa-chevron-right text-gray-700 group-hover:text-blue-500 transition-colors"></i>
+                </div>
+            `;
+        });
+    }
+
+    html += `</div>`;
+    list.innerHTML = html;
+}
+
+/**
+ * Interactive Drill-down: List of Tabs for Browser
+ */
+function renderTabList(browserName) {
+    if (!currentBrowserData || !currentBrowserData.sessions[browserName]) return;
+    const list = document.getElementById('feedList');
+    const tabs = currentBrowserData.sessions[browserName];
+
+    let html = `
+        <div class="flex items-center mb-4 pb-2 border-b border-gray-800">
+            <button onclick="renderBrowserList()" class="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center mr-3 hover:bg-gray-700 transition">
+                <i class="fas fa-arrow-left text-xs"></i>
+            </button>
+            <div class="text-xs font-bold text-gray-300 uppercase tracking-widest flex items-center">
+                <i class="fab fa-${browserName.toLowerCase()} mr-2 text-blue-400"></i> ${browserName} TABS
+            </div>
+            <span class="ml-auto px-2 py-0.5 bg-gray-800 rounded text-[10px] text-gray-500">${tabs.length}</span>
+        </div>
+        <div class="space-y-3">
+    `;
+
+    tabs.forEach(tab => {
+        const urlStr = tab.url ? `<div class="text-[10px] text-blue-400/60 truncate mt-1 italic hover:underline cursor-pointer">${tab.url}</div>` : '';
+        html += `
+            <div class="p-3 bg-gray-900/40 rounded-lg border border-gray-800/50 hover:border-blue-500/30 transition-all overflow-hidden group">
+                <div class="flex items-start">
+                    <div class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center mr-3 shrink-0 group-hover:bg-blue-500/10 transition-colors">
+                        <i class="fas fa-globe text-[10px] text-gray-600 group-hover:text-blue-500"></i>
+                    </div>
+                    <div class="min-w-0 flex-1">
+                        <div class="text-xs text-gray-200 font-medium leading-normal">${tab.title}</div>
+                        ${urlStr}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    html += `</div>`;
+    list.innerHTML = html;
 }
 
 

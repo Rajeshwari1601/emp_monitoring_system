@@ -18,3 +18,5 @@ API master/test_db_connection.py
 .DS_Store
 Thumbs.db
 venv/
+server_error.log
+.admin_token

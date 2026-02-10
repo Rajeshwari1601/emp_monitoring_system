@@ -89,75 +89,29 @@
             const btn = e.target.querySelector('button');
             const originalBtnText = btn.innerHTML;
 
-            // Simple validation
             if (!email || !password) return;
 
-            // Loading state
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Signing In...';
             btn.disabled = true;
             errorContainer.classList.add('hidden');
 
             try {
-                // We'll manually call login to handle custom error display easily
-                // Or use APIClient if it exposes what we need. 
-                // Let's rely on fetch for direct control here or instantiate APIClient.
+                const api = new APIClient();
+                const success = await api.login(email, password);
 
-                // Check if APIClient exists
-                if (typeof APIClient === 'undefined') {
-                    throw new Error("API Client not loaded");
-                }
-
-                // const api = new APIClient(); // Reuse if needed
-
-                // Note: APIClient might need to be instantiated differently if it takes args?
-                // Checking previous code: const api = new APIClient(); -> seems fine.
-
-                // However, api.login might handle saving token.
-                // Let's implement a direct fetch to be safe and clear.
-                const API_URL = 'http://localhost:8001/api/v1'; // Hardcoded for this specific login file or use config
-
-                const response = await fetch(`${API_URL}/auth/login`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        email: email,
-                        password: password,
-                        device_id: 'ADMIN_CONSOLE'
-                    })
-                });
-
-                let data;
-                const contentType = response.headers.get("content-type");
-                if (contentType && contentType.indexOf("application/json") !== -1) {
-                    data = await response.json();
-                } else {
-                    data = { detail: await response.text() }; // Handle non-JSON 500s
-                }
-
-                if (!response.ok) {
-                    let errorMessage = 'Invalid credentials';
-                    if (data.detail) {
-                        errorMessage = typeof data.detail === 'object' ? JSON.stringify(data.detail) : data.detail;
-                    }
-                    throw new Error(errorMessage);
-                }
-
-                if (data.access_token) {
-                    localStorage.setItem('access_token', data.access_token);
-                    // Redirect
+                if (success) {
                     window.location.href = 'index.html';
                 } else {
-                    throw new Error("No access token received");
+                    throw new Error("Invalid email or password");
                 }
 
             } catch (err) {
                 console.error(err);
-                errorMsg.textContent = err.message;
+                errorMsg.textContent = err.message || "Connection failed. Please check if the server is running.";
                 errorContainer.classList.remove('hidden');
 
-                // Shake animation
                 const card = document.querySelector('.bg-gray-800\\/80');
-                card.classList.add('animate-pulse'); // Simple visual cue
+                card.classList.add('animate-pulse');
                 setTimeout(() => card.classList.remove('animate-pulse'), 500);
 
             } finally {

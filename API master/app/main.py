@@ -49,6 +49,18 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request, exc):
+    import traceback
+    logger.error(f"GLOBAL ERROR: {exc}")
+    logger.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error", "error": str(exc)}
+    )
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to Windows Monitoring System API"}
