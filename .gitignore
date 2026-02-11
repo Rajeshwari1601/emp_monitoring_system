@@ -20,3 +20,7 @@ Thumbs.db
 venv/
 server_error.log
 .admin_token
+
+# Data
+API master/static/
+static/

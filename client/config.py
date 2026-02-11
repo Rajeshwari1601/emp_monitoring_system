@@ -4,7 +4,6 @@ import platform
 import subprocess
 
 class Config:
-    # API_BASE_URL = "https://unintruding-nehemiah-imputative.ngrok-free.dev/api/v1"
     API_BASE_URL = "http://localhost:8000/api/v1"
     TOKEN_FILE = "client_token.key"
     
@@ -55,7 +54,7 @@ class Config:
             os.remove(Config.TOKEN_FILE)
 
 class BrowserConfig:
-    MAX_SEARCH_DEPTH = 10
+    MAX_SEARCH_DEPTH = 8
     UI_SEARCH_TIMEOUT_MS = 500
     
     BROWSERS = {

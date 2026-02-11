@@ -126,6 +126,14 @@ class APIClient {
         return this.request(`/admin/commands?user_id=${userId}`);
     }
 
+    async getLatestScreenshot(userId) {
+        return this.request(`/admin/screenshot/latest/${userId}`);
+    }
+
+    async getScreenshotCount(userId) {
+        return this.request(`/admin/screenshot-count/${userId}`);
+    }
+
     logout() {
         localStorage.removeItem('access_token');
         window.location.href = 'login.html';

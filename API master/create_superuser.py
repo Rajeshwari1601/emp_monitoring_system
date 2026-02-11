@@ -16,6 +16,7 @@ def create_superuser():
     new_user = User(
         email=email,
         name="Super Admin",
+        
         hashed_password=get_password_hash(password),
         is_superuser=True
     )

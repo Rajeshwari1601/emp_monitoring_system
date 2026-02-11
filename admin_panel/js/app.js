@@ -2,6 +2,9 @@ const api = new APIClient();
 let currentUserId = null;
 let commandPollInterval = null;
 let currentBrowserData = null; // Added for browser drill-down
+let allUsersData = [];
+let onlineUsersData = [];
+let currentLiveFeedMode = 'reset'; // Tracks what's currently shown in Live Feed
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -15,6 +18,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('logoutBtn').addEventListener('click', () => api.logout());
     document.getElementById('refreshUsersBtn').addEventListener('click', loadDashboard);
+
+    const searchInput = document.getElementById('employeeSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            renderUserList(allUsersData, onlineUsersData, e.target.value);
+        });
+    }
 
     initCharts();
 });
@@ -88,16 +98,44 @@ async function checkAuth() {
 }
 
 async function loadDashboard() {
+    const refreshBtn = document.getElementById('refreshUsersBtn');
+    const refreshIcon = refreshBtn ? refreshBtn.querySelector('i') : null;
+
+    // Start spin animation
+    if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
     try {
         const [onlineData, allUsers] = await Promise.all([
             api.getOnlineUsers(),
             api.getAllUsers()
         ]);
 
+        allUsersData = allUsers;
+        onlineUsersData = onlineData.users;
+
+        const searchInput = document.getElementById('employeeSearchInput');
+        const filterText = searchInput ? searchInput.value : '';
+
         updateStats(onlineData.users.length, allUsers.length);
-        renderUserList(allUsers, onlineData.users);
+        renderUserList(allUsers, onlineData.users, filterText);
+
+        // If a user is currently selected, refresh their specific details too
+        if (currentUserId) {
+            loadScreenshotCount(currentUserId);
+            // Only auto-load screenshot if we are currently in image mode
+            if (currentLiveFeedMode === 'image' || currentLiveFeedMode === 'reset') {
+                loadLatestScreenshot(currentUserId);
+            }
+        }
     } catch (err) {
         console.error("Dashboard refresh failed", err);
+    } finally {
+        // Stop spin animation
+        if (refreshIcon) {
+            setTimeout(() => {
+                refreshIcon.classList.remove('fa-spin');
+            }, 500); // Minimum spin for visual feedback
+        }
     }
 }
 
@@ -118,13 +156,27 @@ function updateStats(onlineCount, totalCount) {
     // Here we might fetch specific details later
 }
 
-function renderUserList(allUsers, onlineUsers) {
+function renderUserList(allUsers, onlineUsers, filterText = '') {
     const listContainer = document.getElementById('usersList');
     const onlineIds = new Set(onlineUsers.map(u => u.user_id));
 
     listContainer.innerHTML = '';
 
-    allUsers.forEach(user => {
+    const filteredUsers = allUsers.filter(user =>
+        (user.name || '').toLowerCase().includes(filterText.toLowerCase())
+    );
+
+    if (filteredUsers.length === 0) {
+        listContainer.innerHTML = `
+            <div class="text-center text-slate-500 text-sm py-8">
+                <i class="fas fa-search text-2xl mb-2 opacity-20"></i>
+                <p>No employees found</p>
+            </div>
+        `;
+        return;
+    }
+
+    filteredUsers.forEach(user => {
         const isOnline = onlineIds.has(user.id);
         const el = document.createElement('div');
         // Match Sidebar styling
@@ -135,7 +187,7 @@ function renderUserList(allUsers, onlineUsers) {
             <div class="flex items-center w-full">
                 <div class="relative mr-3">
                     <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 border border-slate-600">
-                        ${user.name.charAt(0).toUpperCase()}
+                        ${(user.name || 'U').charAt(0).toUpperCase()}
                     </div>
                     <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-slate-900 ${isOnline ? 'bg-green-500' : 'bg-slate-500'}"></div>
                 </div>
@@ -152,6 +204,12 @@ function renderUserList(allUsers, onlineUsers) {
 
 function selectUser(user, isOnline) {
     currentUserId = user.id;
+
+    // Stop and clear any active polling from previous user
+    if (commandPollInterval) {
+        clearInterval(commandPollInterval);
+        commandPollInterval = null;
+    }
 
     // UI Updates
     document.getElementById('noUserSelected').classList.add('hidden');
@@ -183,6 +241,23 @@ function selectUser(user, isOnline) {
     clearLogs();
     log(`Selected user: ${user.name}`);
     loadHistory(user.id);
+
+    // Load latest screenshot automatically - this resets the view to Image
+    loadLatestScreenshot(user.id, true);
+
+    // Load screenshot count for today
+    loadScreenshotCount(user.id);
+}
+
+async function loadScreenshotCount(userId) {
+    if (!userId) return;
+    try {
+        const data = await api.getScreenshotCount(userId);
+        const countEl = document.getElementById('detailScreenshots');
+        if (countEl) countEl.textContent = data.count;
+    } catch (err) {
+        console.error("Failed to load screenshot count:", err);
+    }
 }
 
 // ------ Live Feed Management ------
@@ -194,46 +269,102 @@ function updateLiveFeed(type, data) {
     const list = document.getElementById('feedList');
     const loading = document.getElementById('feedLoading');
     const titleEl = document.getElementById('liveFeedTitle');
+    const expandBtn = document.getElementById('expandScreenshotBtn');
 
-    // Hide all first
-    placeholder.classList.add('hidden');
-    image.classList.add('hidden');
-    list.classList.add('hidden');
+    if (!container || !placeholder || !image || !list || !loading) {
+        console.error("Critical elements missing for Live Feed updates");
+        return;
+    }
+
+    // Reset visibility (Hide all)
+    placeholder.style.display = 'none';
+    image.style.display = 'none';
+    list.style.display = 'none';
+    loading.style.display = 'none';
+    list.classList.add('hidden'); // Ensure Tailwind class is also handled if used elsewhere
     loading.classList.add('hidden');
+    if (expandBtn) expandBtn.classList.add('hidden'); // Hide expand button by default
+
+    // Update current mode
+    currentLiveFeedMode = type;
 
     if (type === 'reset') {
-        placeholder.classList.remove('hidden');
+        placeholder.style.display = 'block';
         if (titleEl) titleEl.textContent = 'Live Feed';
         return;
     }
 
     if (type === 'loading') {
+        loading.style.display = 'flex';
         loading.classList.remove('hidden');
-        // Keep previous content visible behind loading overlay? Or just show overlay?
-        // Let's keep placeholder visible if nothing else
-        if (image.src === "" && list.innerHTML === "") placeholder.classList.remove('hidden');
+        // Keep placeholder visible behind loading if empty
+        if (!image.src || image.src.endsWith('#') || image.style.display === 'none') {
+            placeholder.style.display = 'block';
+        }
         return;
     }
 
     if (type === 'image') {
+        // Set source
         image.src = data;
-        image.classList.remove('hidden');
+
+        // Error handling for image load
+        image.onerror = function () {
+            log('Error loading image. Check console.', 'error');
+            console.error("Image failed to load:", data);
+            placeholder.style.display = 'block'; // Fallback
+            image.style.display = 'none';
+            if (expandBtn) expandBtn.classList.add('hidden');
+        };
+
+        image.onload = function () {
+            // Only show when loaded
+            image.style.display = 'block';
+            // Show expand button when image is displayed
+            if (expandBtn) expandBtn.classList.remove('hidden');
+        };
+
+        // Force display block immediately too, onload handles final render
+        image.style.display = 'block';
+
         if (titleEl) titleEl.textContent = 'Remote Screen Capture';
+
     } else if (type === 'apps') {
-        list.innerHTML = `
-            <div class="mb-4 text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-2">Active Processes</div>
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
-                ${data.map(app => `
-                    <div class="flex items-center space-x-2 p-2 bg-gray-900/50 rounded border border-gray-800">
-                        <i class="fas fa-microchip text-blue-500 text-[10px]"></i>
-                        <span class="text-xs text-gray-300 truncate">${app.name || app}</span>
-                        <span class="text-[10px] text-gray-600 ml-auto">PID: ${app.pid || 'N/A'}</span>
-                    </div>
-                `).join('')}
+        // Redesigned structured list with Application and Duration columns
+        const header = `
+            <div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                <div class="flex-1">Application</div>
+                <div class="w-24 text-right">Duration</div>
             </div>
         `;
+
+        const rows = data.map(app => {
+            const name = app.name || 'Unknown';
+            const icon = app.icon || 'https://placehold.co/32x32?text=?';
+            const duration = app.duration || '00:00:00';
+
+            return `
+                <div class="flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-gray-900 last:border-0 group">
+                    <div class="flex items-center flex-1 min-w-0">
+                        <img src="${icon}" class="w-8 h-8 rounded p-0.5 bg-gray-800/50 mr-3 object-contain transition-transform group-hover:scale-110" 
+                             onerror="this.src='https://placehold.co/32x32?text=?'">
+                        <div class="truncate">
+                            <div class="text-sm font-medium text-gray-200">${name}</div>
+                            ${app.title ? `<div class="text-[10px] text-gray-500 truncate mt-0.5">${app.title}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="w-24 text-right font-mono text-xs text-gray-400 group-hover:text-blue-400 transition-colors">
+                        ${duration}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        list.innerHTML = `<div class="bg-black/40 rounded-lg overflow-hidden border border-gray-800">${header}${rows}</div>`;
+        list.style.display = 'block';
         list.classList.remove('hidden');
-        if (titleEl) titleEl.textContent = 'Running Applications';
+        if (titleEl) titleEl.textContent = 'Active Applications';
+
     } else if (type === 'browser') {
         console.log("DEBUG: Received Browser Data:", data);
 
@@ -245,8 +376,17 @@ function updateLiveFeed(type, data) {
         // Store for interactive navigation
         currentBrowserData = details;
 
-        renderBrowserList();
+        if (!details || !details.sessions || Object.keys(details.sessions).length === 0) {
+            list.innerHTML = `<div class="text-gray-500 italic p-10 text-center">
+                <i class="fas fa-search-minus text-3xl mb-3 opacity-20"></i>
+                <p>No active browser tabs detected on the client.</p>
+                <p class="text-[10px] mt-2 uppercase tracking-widest text-gray-700">Method used: ${details?.meta?.method || 'Unknown'}</p>
+            </div>`;
+        } else {
+            renderBrowserList();
+        }
 
+        list.style.display = 'block';
         list.classList.remove('hidden');
         if (titleEl) titleEl.textContent = 'Browser Activity Monitoring';
     }
@@ -259,30 +399,55 @@ function renderBrowserList() {
     if (!currentBrowserData) return;
     const list = document.getElementById('feedList');
     const sessions = currentBrowserData.sessions || {};
+    const icons = currentBrowserData.icon_meta || {};
 
     let html = `
-        <div class="mb-4 text-xs font-bold text-gray-500 uppercase tracking-widest border-b border-gray-800 pb-2">Detected Browsers</div>
-        <div class="grid grid-cols-1 gap-3">
+        <div class="mb-4 px-2 flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-[0.2em]">Active Browsers</div>
+            <div class="px-2 py-0.5 rounded-full bg-slate-800 text-[10px] text-slate-400 border border-slate-700">
+                ${Object.keys(sessions).length} detected
+            </div>
+        </div>
+        <div class="grid grid-cols-1 gap-2.5">
     `;
 
-    const browserNames = Object.keys(sessions);
+    const browserNames = Object.keys(sessions).filter(k => k !== 'icon_meta').sort();
     if (browserNames.length === 0) {
-        html += `<div class="text-gray-600 italic p-10 text-center">No browsers with detailed tab information detected.</div>`;
+        html += `
+            <div class="flex flex-col items-center justify-center p-12 text-slate-600 bg-slate-900/40 rounded-2xl border border-dashed border-slate-800">
+                <i class="fas fa-browser text-4xl mb-3 opacity-20"></i>
+                <p class="text-sm">No active browsers detected</p>
+            </div>`;
     } else {
         browserNames.forEach(name => {
             const count = sessions[name].length;
+            const icon = icons[name];
+
+            const iconHtml = icon
+                ? `<div class="relative">
+                     <img src="${icon}" class="w-11 h-11 object-contain rounded-xl p-1.5 bg-slate-800 border border-slate-700 group-hover:border-blue-500/50 transition-colors shadow-lg">
+                   </div>`
+                : `<div class="w-11 h-11 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center border border-slate-700 group-hover:border-blue-500/50 transition-colors">
+                     <i class="fab fa-${name.toLowerCase().includes('chrome') ? 'chrome' : (name.toLowerCase().includes('edge') ? 'edge' : 'globe')} text-slate-400 text-xl"></i>
+                   </div>`;
+
             html += `
-                <div onclick="renderTabList('${name}')" class="flex items-center justify-between p-4 bg-gray-900/50 rounded-xl border border-gray-800 hover:border-blue-500 hover:bg-blue-500/5 cursor-pointer transition-all group">
-                    <div class="flex items-center">
-                        <div class="w-10 h-10 rounded-full bg-blue-500/10 flex items-center justify-center mr-4 group-hover:scale-110 transition-transform">
-                            <i class="fab fa-${name.toLowerCase()} text-blue-500 text-lg"></i>
-                        </div>
-                        <div>
-                            <div class="text-sm font-bold text-gray-200 group-hover:text-blue-400 transition-colors uppercase tracking-tight">${name}</div>
-                            <div class="text-[10px] text-gray-500 uppercase tracking-wider">${count} Open Tabs</div>
+                <div onclick="renderTabList('${name}')" 
+                     class="flex items-center justify-between p-4 bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800/80 hover:border-blue-500/40 hover:bg-blue-500/5 cursor-pointer transition-all duration-300 group shadow-sm">
+                    <div class="flex items-center space-x-4">
+                        ${iconHtml}
+                        <div class="min-w-0">
+                            <div class="text-sm font-semibold text-slate-100 group-hover:text-blue-400 transition-colors tracking-tight">${name}</div>
+                            <div class="flex items-center mt-0.5 space-x-2">
+                                <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">${count} Open Tabs</span>
+                                <span class="w-1 h-1 rounded-full bg-slate-700"></span>
+                                <span class="text-[10px] text-blue-500/80 font-semibold uppercase">Active Session</span>
+                            </div>
                         </div>
                     </div>
-                    <i class="fas fa-chevron-right text-gray-700 group-hover:text-blue-500 transition-colors"></i>
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center bg-slate-800/50 group-hover:bg-blue-500/20 group-hover:text-blue-400 text-slate-600 transition-all">
+                        <i class="fas fa-chevron-right text-[10px]"></i>
+                    </div>
                 </div>
             `;
         });
@@ -292,40 +457,54 @@ function renderBrowserList() {
     list.innerHTML = html;
 }
 
-/**
- * Interactive Drill-down: List of Tabs for Browser
- */
 function renderTabList(browserName) {
     if (!currentBrowserData || !currentBrowserData.sessions[browserName]) return;
     const list = document.getElementById('feedList');
     const tabs = currentBrowserData.sessions[browserName];
 
     let html = `
-        <div class="flex items-center mb-4 pb-2 border-b border-gray-800">
-            <button onclick="renderBrowserList()" class="w-8 h-8 rounded-full bg-gray-800 flex items-center justify-center mr-3 hover:bg-gray-700 transition">
-                <i class="fas fa-arrow-left text-xs"></i>
+        <div class="flex items-center mb-5 pb-3 border-b border-slate-800/50">
+            <button onclick="renderBrowserList()" class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center mr-4 hover:bg-slate-700 hover:text-white transition-all text-slate-400 shadow-sm border border-slate-700">
+                <i class="fas fa-arrow-left text-[10px]"></i>
             </button>
-            <div class="text-xs font-bold text-gray-300 uppercase tracking-widest flex items-center">
-                <i class="fab fa-${browserName.toLowerCase()} mr-2 text-blue-400"></i> ${browserName} TABS
+            <div class="min-w-0 flex-1">
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Browsing History</div>
+                <div class="text-sm font-bold text-slate-100 truncate">${browserName}</div>
             </div>
-            <span class="ml-auto px-2 py-0.5 bg-gray-800 rounded text-[10px] text-gray-500">${tabs.length}</span>
+            <div class="ml-4 px-2.5 py-1 bg-blue-500/10 rounded-lg text-[10px] font-bold text-blue-400 border border-blue-500/20">
+                ${tabs.length} Tabs
+            </div>
         </div>
-        <div class="space-y-3">
+        <div class="space-y-2.5">
     `;
 
     tabs.forEach(tab => {
-        const urlStr = tab.url ? `<div class="text-[10px] text-blue-400/60 truncate mt-1 italic hover:underline cursor-pointer">${tab.url}</div>` : '';
+        const urlStr = tab.url ? `<div class="text-[10px] text-blue-400/70 truncate mt-1 italic tracking-tight">${tab.url}</div>` : '';
+
+        // Use tab icon (favicon) with fallback
+        const tabIconHtml = tab.icon
+            ? `<div class="relative shrink-0">
+                 <img src="${tab.icon}" class="w-9 h-9 object-contain rounded-lg bg-white/5 p-1 border border-slate-700/50 group-hover:border-blue-500/30 transition-colors shadow-sm"
+                      onerror="this.src='https://www.google.com/s2/favicons?sz=64&domain=google.com'">
+               </div>`
+            : `<div class="w-9 h-9 rounded-lg bg-slate-800/80 flex items-center justify-center shrink-0 border border-slate-700/50 group-hover:border-blue-500/30 transition-colors">
+                 <i class="fas fa-globe text-[11px] text-slate-500 group-hover:text-blue-400"></i>
+               </div>`;
+
         html += `
-            <div class="p-3 bg-gray-900/40 rounded-lg border border-gray-800/50 hover:border-blue-500/30 transition-all overflow-hidden group">
-                <div class="flex items-start">
-                    <div class="w-6 h-6 rounded bg-gray-800 flex items-center justify-center mr-3 shrink-0 group-hover:bg-blue-500/10 transition-colors">
-                        <i class="fas fa-globe text-[10px] text-gray-600 group-hover:text-blue-500"></i>
-                    </div>
-                    <div class="min-w-0 flex-1">
-                        <div class="text-xs text-gray-200 font-medium leading-normal">${tab.title}</div>
+            <div class="p-3.5 bg-slate-900/50 backdrop-blur-sm rounded-xl border border-slate-800/50 hover:border-slate-700 hover:bg-slate-800/40 transition-all duration-200 group relative">
+                <div class="flex items-center">
+                    ${tabIconHtml}
+                    <div class="min-w-0 flex-1 ml-4">
+                        <div class="text-xs text-slate-200 font-semibold leading-tight group-hover:text-white transition-colors truncate">${tab.title}</div>
                         ${urlStr}
                     </div>
+                    ${tab.is_active ? `
+                        <div class="ml-2 w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                    ` : ''}
                 </div>
+                <!-- Tooltip for full URL on hover -->
+                ${tab.url ? `<div class="absolute inset-0 z-10 opacity-0 bg-transparent" title="${tab.url}"></div>` : ''}
             </div>
         `;
     });
@@ -368,24 +547,39 @@ async function pollForCommandResult(commandId, type, userId) {
 
     commandPollInterval = setInterval(async () => {
         attempts++;
+        const titleEl = document.getElementById('liveFeedTitle');
         if (attempts > maxAttempts) {
             clearInterval(commandPollInterval);
             log(`Timeout waiting for ${type} result.`, 'warning');
             updateLiveFeed('reset');
+            // Update title to show timeout
+            if (titleEl) titleEl.textContent = `${type} Request Timed Out`;
             return;
         }
 
         try {
+            if (attempts % 3 === 0) log(`Polling... (${attempts}/${maxAttempts})`); // Debug log
+
             if (type === 'TAKE_SCREENSHOT') {
                 const res = await api.getScreenshot(commandId);
                 if (res.url) {
                     clearInterval(commandPollInterval);
                     log(`Screenshot received!`, 'success');
-                    updateLiveFeed('image', res.url);
 
-                    // Also update stats card
-                    const countEl = document.getElementById('detailScreenshots');
-                    if (countEl) countEl.textContent = parseInt(countEl.textContent || 0) + 1;
+                    // Display in Live Feed Container
+                    // Prefer Base64 (image_data) if available to avoid CORS/Mixed Content issues
+                    let imageUrl;
+                    if (res.image_data) {
+                        imageUrl = res.image_data;
+                    } else {
+                        // Fallback to URL with timestamp
+                        imageUrl = `${res.url}?t=${new Date().getTime()}`;
+                    }
+
+                    updateLiveFeed('image', imageUrl);
+
+                    // Refresh screenshot count for today
+                    loadScreenshotCount(userId);
                 }
             } else if (type === 'GET_RUNNING_APPS') {
                 const history = await api.getCommandHistory(userId);
@@ -396,11 +590,13 @@ async function pollForCommandResult(commandId, type, userId) {
                     log(`Apps received: ${appsData.apps.length} running.`, 'success');
                     updateLiveFeed('apps', appsData.apps);
 
-                    // Update stats card
+                    // Update stats card with the actual active application (foreground)
                     const appEl = document.getElementById('detailApp');
                     if (appEl && appsData.apps.length > 0) {
-                        appEl.textContent = appsData.apps[0].name || appsData.apps[0];
-                        appEl.title = appsData.apps[0].name || appsData.apps[0];
+                        // Find the one marked as is_active, or fallback to first
+                        const activeApp = appsData.apps.find(a => a.is_active) || appsData.apps[0];
+                        appEl.textContent = activeApp.name || activeApp;
+                        appEl.title = activeApp.name || activeApp;
                     }
                 } else if (cmd && cmd.status === 'FAILED') {
                     clearInterval(commandPollInterval);
@@ -418,7 +614,8 @@ async function pollForCommandResult(commandId, type, userId) {
                 }
             }
         } catch (e) {
-            // Ignore errors while polling
+            // Ignore errors while polling, but log fatal ones
+            if (attempts % 5 === 0) log(`Polling error: ${e.message}`, 'warning');
             console.log("Polling error:", e);
         }
 
@@ -503,6 +700,64 @@ function toggleNavDrawer() {
     } else {
         drawer.classList.add('translate-x-full');
         overlay.classList.add('hidden');
+    }
+}
+
+// ------ Latest Screenshot Functions ------
+
+async function loadLatestScreenshot(userId, forceRefresh = false) {
+    if (!userId) return;
+
+    // Guard: Don't override if user is looking at Apps or Browser, unless forced (e.g. user selection)
+    if (!forceRefresh && currentLiveFeedMode !== 'image' && currentLiveFeedMode !== 'reset' && currentLiveFeedMode !== 'loading') {
+        return;
+    }
+
+    try {
+        const data = await api.getLatestScreenshot(userId);
+
+        // Prefer base64 image_data if available
+        let imageUrl;
+        if (data.image_data) {
+            imageUrl = data.image_data;
+        } else {
+            // Fallback to URL with cache-busting timestamp
+            imageUrl = `${data.url}?t=${new Date().getTime()}`;
+        }
+
+        // Update live feed with the screenshot
+        updateLiveFeed('image', imageUrl);
+
+        log('Latest screenshot loaded', 'success');
+
+    } catch (err) {
+        // No screenshot available - this is normal for new users
+        console.log('No screenshot available:', err.message);
+        // Keep the placeholder visible
+        updateLiveFeed('reset');
+    }
+}
+
+// Expand screenshot to fullscreen
+function expandScreenshot() {
+    const feedImage = document.getElementById('feedImage');
+    const modal = document.getElementById('screenshotModal');
+    const previewImage = document.getElementById('screenshotPreview');
+    const downloadLink = document.getElementById('downloadLink');
+
+    if (!feedImage || !feedImage.src || feedImage.style.display === 'none') {
+        console.log('No screenshot to expand');
+        return;
+    }
+
+    // Set the modal image to the current feed image
+    if (previewImage) previewImage.src = feedImage.src;
+    if (downloadLink) downloadLink.href = feedImage.src;
+
+    // Show modal
+    if (modal) {
+        modal.classList.remove('hidden');
+        log('Screenshot expanded to fullscreen', 'info');
     }
 }
 

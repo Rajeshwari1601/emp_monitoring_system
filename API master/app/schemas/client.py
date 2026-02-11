@@ -36,6 +36,7 @@ class CommandSchema(BaseModel):
 class ScreenshotUpload(BaseModel):
     command_id: Optional[str]
     image_base64: str
+    is_auto: Optional[bool] = False
 
 class ScreenshotResponse(BaseModel):
     success: bool
@@ -44,6 +45,10 @@ class ScreenshotResponse(BaseModel):
 class AppInfo(BaseModel):
     name: str
     pid: int
+    title: Optional[str] = None
+    exe_path: Optional[str] = None
+    icon: Optional[str] = None
+    duration: Optional[str] = None
 
 class AppLogUpload(BaseModel):
     command_id: Optional[str]

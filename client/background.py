@@ -15,6 +15,7 @@ from datetime import datetime
 
 from api_client import APIClient
 from config import Config
+from lists_apps import get_running_applications
 
 # Setup logging for this module
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,19 +25,38 @@ class BackgroundService:
     def __init__(self):
         self.api = APIClient()
         self.running = True
+        logger.info(f"BackgroundService initialized for user: {self.api.headers.get('Authorization')[:15]}...")
 
     def start(self):
+        self.last_heartbeat = time.time()
+        self.last_command_poll = time.time()
+        
         # Start Heartbeat Thread
         threading.Thread(target=self.heartbeat_loop, daemon=True).start()
         # Start Command Polling Thread
         threading.Thread(target=self.command_loop, daemon=True).start()
         
-        # Keep main thread alive or allow it to be joined
+        # Keep main thread alive and monitor health
         while self.running:
-            time.sleep(1)
+            self.check_health()
+            time.sleep(5)
+
+    def check_health(self):
+        """Monitors the health of background threads."""
+        now = time.time()
+        # If no heartbeat for 120s, something is wrong
+        if now - self.last_heartbeat > 120:
+            logger.error(f"Heartbeat thread seems stuck! (Last: {now - self.last_heartbeat:.1f}s ago). Restarting...")
+            os._exit(401)
+        
+        # If no command polling for 120s, something is wrong
+        if now - self.last_command_poll > 120:
+            logger.error(f"Command loop seems stuck! (Last: {now - self.last_command_poll:.1f}s ago). Restarting...")
+            os._exit(500)
 
     def heartbeat_loop(self):
         while self.running:
+            self.last_heartbeat = time.time()
             success = self.api.heartbeat()
             if not success:
                # Token likely expired or invalid
@@ -56,10 +76,13 @@ class BackgroundService:
 
     def command_loop(self):
         while self.running:
+            self.last_command_poll = time.time()
             try:
                 commands = self.api.get_commands()
                 for cmd in commands:
-                    self.process_command(cmd)
+                    # Run each command in a separate thread to avoid blocking
+                    logger.info(f"Dispatching command {cmd.get('command')} to thread...")
+                    threading.Thread(target=self.process_command, args=(cmd,), daemon=True).start()
             except Exception as e:
                 logger.error(f"Error in command loop: {e}")
             time.sleep(5)
@@ -110,17 +133,27 @@ class BackgroundService:
             logger.error(f"Upload failed: {e}")
 
     def get_running_apps(self, command_id):
-        # Optimize: Get top 50 apps by memory to avoid huge payload
+        # Get only user-visible applications (foreground apps with windows)
         apps = []
         try:
-             # Sort by memory usage
-             for proc in sorted(psutil.process_iter(['pid', 'name', 'memory_info']), key=lambda p: p.info['memory_info'].rss, reverse=True)[:50]:
-                try:
-                    apps.append({"name": proc.info['name'], "pid": proc.info['pid']})
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
+            # Use the new lists_apps functionality to get user-visible applications only
+            visible_apps = get_running_applications()
+            
+            # Format the data for upload
+            for app in visible_apps:
+                apps.append({
+                    "name": app['name'],
+                    "pid": app['pid'],
+                    "title": app['title'],
+                    "exe_path": app['exe_path'],
+                    "duration": app['duration'],
+                    "icon": app['icon'],
+                    "is_active": app.get('is_active', False)
+                })
+            
+            logger.info(f"Found {len(apps)} user-visible applications")
         except Exception as e:
-             logger.error(f"Error getting apps: {e}")
+            logger.error(f"Error getting apps: {e}")
         
         # Upload
         url = f"{self.api.base_url}/client/apps/upload"
