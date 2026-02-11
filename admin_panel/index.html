@@ -40,10 +40,19 @@
             <span
                 class="ml-2 px-2.5 py-1 rounded-full bg-slate-800 text-blue-400 text-xs font-bold border border-slate-700"
                 id="totalUserCount">0</span>
-            <button id="refreshUsersBtn"
-                class="ml-auto text-slate-400 hover:text-white transition hover:rotate-180 duration-500">
+            <button id="refreshUsersBtn" class="ml-auto text-slate-400 hover:text-white transition-colors duration-200">
                 <i class="fas fa-sync-alt"></i>
             </button>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="px-4 py-3 bg-slate-900 border-b border-slate-800">
+            <div class="relative group">
+                <i
+                    class="fas fa-search absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-blue-400 transition-colors"></i>
+                <input type="text" id="employeeSearchInput" placeholder="Search employees..."
+                    class="w-full bg-slate-800 text-sm py-2 pl-9 pr-4 rounded-lg border border-slate-700 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder-slate-500 text-slate-200">
+            </div>
         </div>
 
         <!-- User List Container -->
@@ -203,57 +212,6 @@
                             title="View Fullscreen">
                             <i class="fas fa-expand text-lg group-hover:scale-110 transition-transform"></i>
                         </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Bottom: Recent Commands -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <!-- Activity Summary (Charts) -->
-                <!-- Activity Summary (Charts) -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5 flex flex-col">
-                    <h3 class="font-bold text-gray-700 mb-4 border-b border-gray-100 pb-2">Activity Summary</h3>
-
-                    <div class="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Pie Chart -->
-                        <div class="flex flex-col items-center justify-center p-2">
-                            <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Applications Usage</h4>
-                            <div class="relative w-40 h-40">
-                                <canvas id="appsChart"></canvas>
-                            </div>
-                        </div>
-
-                        <!-- Bar Chart -->
-                        <div class="flex flex-col justify-center p-2">
-                            <h4 class="text-xs font-bold text-gray-500 uppercase mb-2">Weekly Active Hours</h4>
-                            <div class="relative w-full h-32">
-                                <canvas id="hoursChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-
-                <!-- History Log -->
-                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-5">
-                    <div class="flex justify-between items-center mb-4 border-b border-gray-100 pb-2">
-                        <h3 class="font-bold text-gray-700">History</h3>
-                        <button onclick="clearLogs()" class="text-xs text-blue-500">Clear</button>
-                    </div>
-                    <div class="overflow-auto max-h-48 logs-scroll">
-                        <table class="w-full text-left text-sm">
-                            <thead class="bg-gray-50 text-gray-500 text-xs uppercase">
-                                <tr>
-                                    <th class="p-2">Command</th>
-                                    <th class="p-2">Status</th>
-                                    <th class="p-2 text-right">Time</th>
-                                </tr>
-                            </thead>
-                            <tbody id="commandLogTable" class="divide-y divide-gray-50"></tbody>
-                        </table>
-                        <div id="emptyLog" class="text-center text-gray-400 text-sm py-4 hidden">No recent commands
-                        </div>
                     </div>
                 </div>
             </div>

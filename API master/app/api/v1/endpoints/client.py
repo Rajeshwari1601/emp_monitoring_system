@@ -61,28 +61,23 @@ def upload_screenshot(
     current_user: User = Depends(deps.get_current_user),
     db: Session = Depends(deps.get_db)
 ) -> Any:
-    file_name = f"{uuid.uuid4()}.png"
-    file_path = f"static/screenshots/{file_name}"
-    
     real_url = ""
     try:
         if screenshot_in.image_base64:
-            with open(file_path, "wb") as f:
-                f.write(base64.b64decode(screenshot_in.image_base64))
-            # Construct URL - strictly ideally this should come from config
-            real_url = f"http://localhost:8000/static/screenshots/{file_name}"
+            # Instead of saving to disk, we store the base64 as a Data URL in the database
+            real_url = f"data:image/png;base64,{screenshot_in.image_base64}"
         else:
              logger.warning("No image_base64 provided in upload")
              real_url = "https://placehold.co/600x400?text=No+Image"
     except Exception as e:
-        logger.error(f"Error saving image: {e}")
-        real_url = "https://placehold.co/600x400?text=Error+Saving"
+        logger.error(f"Error processing screenshot: {e}")
+        real_url = "https://placehold.co/600x400?text=Error+Processing"
     
     shot = Screenshot(
         user_id=current_user.id,
         command_id=screenshot_in.command_id,
         url=real_url,
-        file_path=file_path
+        file_path=None # No longer using filesystem
     )
     db.add(shot)
     db.commit()
@@ -96,12 +91,7 @@ def upload_screenshot(
         ).order_by(Screenshot.created_at.desc()).offset(10).all()
         
         for old_shot in old_screenshots:
-            # Delete file if exists
-            if old_shot.file_path and os.path.exists(old_shot.file_path):
-                try:
-                    os.remove(old_shot.file_path)
-                except:
-                    pass
+            # We don't need os.remove anymore as there are no files
             db.delete(old_shot)
         
         if old_screenshots:

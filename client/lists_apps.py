@@ -21,6 +21,7 @@ from typing import List, Dict, Set
 def is_window_visible_and_valid(hwnd: int) -> bool:
     """
     Check if a window is visible and valid for listing.
+    Standard "Alt-Tab" style filtering per user request.
     """
     if not win32gui.IsWindowVisible(hwnd):
         return False
@@ -28,19 +29,36 @@ def is_window_visible_and_valid(hwnd: int) -> bool:
     title = win32gui.GetWindowText(hwnd)
     if not title or len(title.strip()) == 0:
         return False
-    
-    style = win32gui.GetWindowLong(hwnd, win32con.GWL_STYLE)
+
     ex_style = win32gui.GetWindowLong(hwnd, win32con.GWL_EXSTYLE)
     
+    # Must not be WS_EX_TOOLWINDOW
     if ex_style & win32con.WS_EX_TOOLWINDOW:
         return False
+
+    # Standard "Alt-Tab" style logic:
+    # 1. If WS_EX_APPWINDOW is set -> Include.
+    # 2. If WS_EX_APPWINDOW is NOT set AND GetWindow(GW_OWNER) == 0 -> Include.
+    # 3. Else -> Exclude.
+    is_app_window = bool(ex_style & win32con.WS_EX_APPWINDOW)
+    has_owner = win32gui.GetWindow(hwnd, win32con.GW_OWNER) != 0
     
-    if not (style & win32con.WS_CAPTION and style & win32con.WS_SYSMENU):
+    if not (is_app_window or not has_owner):
         return False
-    
-    if not (ex_style & win32con.WS_EX_APPWINDOW):
-        if win32gui.GetWindow(hwnd, win32con.GW_OWNER) != 0:
+
+    # Maintain Cloaked check for Windows 10/11 UWP apps (Settings, Calculator, etc.)
+    # This prevents invisible UWP host windows from appearing.
+    try:
+        import ctypes
+        from ctypes import wintypes
+        dwmapi = ctypes.WinDLL("dwmapi")
+        DWMWA_CLOAKED = 14
+        cloaked = wintypes.DWORD()
+        dwmapi.DwmGetWindowAttribute(hwnd, DWMWA_CLOAKED, ctypes.byref(cloaked), ctypes.sizeof(cloaked))
+        if cloaked.value != 0:
             return False
+    except:
+        pass
     
     return True
 
@@ -130,17 +148,31 @@ def get_process_info(hwnd: int) -> Dict[str, any]:
     try:
         _, pid = win32process.GetWindowThreadProcessId(hwnd)
         process = psutil.Process(pid)
+        raw_name = process.name()
         exe_path = process.exe() if process.exe() else 'N/A'
+        
+        # Handle ApplicationFrameHost (UWP apps like Settings, Calculator)
+        clean_name = clean_app_name(raw_name)
+        if raw_name.lower() == "applicationframehost.exe":
+            # For UWP apps, the window title is usually more descriptive than the host process name
+            window_title = win32gui.GetWindowText(hwnd)
+            if window_title:
+                clean_name = window_title
+
         create_time = process.create_time()
         duration_sec = time.time() - create_time
         
+        # Check if this window is currently in the foreground
+        is_active = (hwnd == win32gui.GetForegroundWindow())
+        
         return {
             'pid': pid,
-            'raw_name': process.name(),
-            'clean_name': clean_app_name(process.name()),
+            'raw_name': raw_name,
+            'clean_name': clean_name,
             'exe': exe_path,
             'duration': format_duration(duration_sec),
-            'icon': get_icon_base64(hwnd, exe_path)
+            'icon': get_icon_base64(hwnd, exe_path),
+            'is_active': is_active
         }
     except (psutil.NoSuchProcess, psutil.AccessDenied, Exception):
         return {
@@ -149,7 +181,8 @@ def get_process_info(hwnd: int) -> Dict[str, any]:
             'clean_name': 'Unknown',
             'exe': 'N/A',
             'duration': '00:00:00',
-            'icon': ""
+            'icon': "",
+            'is_active': False
         }
 
 
@@ -175,11 +208,13 @@ def get_running_applications() -> List[Dict[str, any]]:
                     'pid': info['pid'],
                     'exe_path': info['exe'],
                     'duration': info['duration'],
-                    'icon': info['icon']
+                    'icon': info['icon'],
+                    'is_active': info['is_active']
                 })
     
     win32gui.EnumWindows(enum_handler, None)
-    applications.sort(key=lambda x: x['name'].lower())
+    # Sort: put active app first, then by name
+    applications.sort(key=lambda x: (not x['is_active'], x['name'].lower()))
     return applications
 
 

@@ -8,6 +8,7 @@ logger = logging.getLogger("API")
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
+        # Consume body to log it
         body = await request.body()
         log_body = "Binary/Large Body"
         try:
@@ -20,7 +21,16 @@ class LoggingMiddleware(BaseHTTPMiddleware):
              
         logger.info(f"REQ: {request.method} {request.url} | BODY: {log_body}")
         
-        response = await call_next(request)
+        # Reset the request body so it can be read again by the endpoint
+        async def receive():
+            return {"type": "http.request", "body": body}
         
-        logger.info(f"RES: {response.status_code}")
-        return response
+        request._receive = receive
+        
+        try:
+            response = await call_next(request)
+            logger.info(f"RES: {response.status_code}")
+            return response
+        except Exception as e:
+            logger.error(f"Middleware caught error: {e}")
+            raise e

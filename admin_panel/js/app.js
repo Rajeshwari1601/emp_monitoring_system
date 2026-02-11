@@ -1,6 +1,10 @@
 const api = new APIClient();
 let currentUserId = null;
 let commandPollInterval = null;
+let currentBrowserData = null; // Added for browser drill-down
+let allUsersData = [];
+let onlineUsersData = [];
+let currentLiveFeedMode = 'reset'; // Tracks what's currently shown in Live Feed
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -14,6 +18,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
     document.getElementById('logoutBtn').addEventListener('click', () => api.logout());
     document.getElementById('refreshUsersBtn').addEventListener('click', loadDashboard);
+
+    const searchInput = document.getElementById('employeeSearchInput');
+    if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+            renderUserList(allUsersData, onlineUsersData, e.target.value);
+        });
+    }
 
     initCharts();
 });
@@ -87,16 +98,44 @@ async function checkAuth() {
 }
 
 async function loadDashboard() {
+    const refreshBtn = document.getElementById('refreshUsersBtn');
+    const refreshIcon = refreshBtn ? refreshBtn.querySelector('i') : null;
+
+    // Start spin animation
+    if (refreshIcon) refreshIcon.classList.add('fa-spin');
+
     try {
         const [onlineData, allUsers] = await Promise.all([
             api.getOnlineUsers(),
             api.getAllUsers()
         ]);
 
+        allUsersData = allUsers;
+        onlineUsersData = onlineData.users;
+
+        const searchInput = document.getElementById('employeeSearchInput');
+        const filterText = searchInput ? searchInput.value : '';
+
         updateStats(onlineData.users.length, allUsers.length);
-        renderUserList(allUsers, onlineData.users);
+        renderUserList(allUsers, onlineData.users, filterText);
+
+        // If a user is currently selected, refresh their specific details too
+        if (currentUserId) {
+            loadScreenshotCount(currentUserId);
+            // Only auto-load screenshot if we are currently in image mode
+            if (currentLiveFeedMode === 'image' || currentLiveFeedMode === 'reset') {
+                loadLatestScreenshot(currentUserId);
+            }
+        }
     } catch (err) {
         console.error("Dashboard refresh failed", err);
+    } finally {
+        // Stop spin animation
+        if (refreshIcon) {
+            setTimeout(() => {
+                refreshIcon.classList.remove('fa-spin');
+            }, 500); // Minimum spin for visual feedback
+        }
     }
 }
 
@@ -117,13 +156,27 @@ function updateStats(onlineCount, totalCount) {
     // Here we might fetch specific details later
 }
 
-function renderUserList(allUsers, onlineUsers) {
+function renderUserList(allUsers, onlineUsers, filterText = '') {
     const listContainer = document.getElementById('usersList');
     const onlineIds = new Set(onlineUsers.map(u => u.user_id));
 
     listContainer.innerHTML = '';
 
-    allUsers.forEach(user => {
+    const filteredUsers = allUsers.filter(user =>
+        (user.name || '').toLowerCase().includes(filterText.toLowerCase())
+    );
+
+    if (filteredUsers.length === 0) {
+        listContainer.innerHTML = `
+            <div class="text-center text-slate-500 text-sm py-8">
+                <i class="fas fa-search text-2xl mb-2 opacity-20"></i>
+                <p>No employees found</p>
+            </div>
+        `;
+        return;
+    }
+
+    filteredUsers.forEach(user => {
         const isOnline = onlineIds.has(user.id);
         const el = document.createElement('div');
         // Match Sidebar styling
@@ -134,7 +187,7 @@ function renderUserList(allUsers, onlineUsers) {
             <div class="flex items-center w-full">
                 <div class="relative mr-3">
                     <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 border border-slate-600">
-                        ${user.name.charAt(0).toUpperCase()}
+                        ${(user.name || 'U').charAt(0).toUpperCase()}
                     </div>
                     <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-slate-900 ${isOnline ? 'bg-green-500' : 'bg-slate-500'}"></div>
                 </div>
@@ -151,6 +204,12 @@ function renderUserList(allUsers, onlineUsers) {
 
 function selectUser(user, isOnline) {
     currentUserId = user.id;
+
+    // Stop and clear any active polling from previous user
+    if (commandPollInterval) {
+        clearInterval(commandPollInterval);
+        commandPollInterval = null;
+    }
 
     // UI Updates
     document.getElementById('noUserSelected').classList.add('hidden');
@@ -183,8 +242,22 @@ function selectUser(user, isOnline) {
     log(`Selected user: ${user.name}`);
     loadHistory(user.id);
 
-    // Load latest screenshot automatically
-    loadLatestScreenshot(user.id);
+    // Load latest screenshot automatically - this resets the view to Image
+    loadLatestScreenshot(user.id, true);
+
+    // Load screenshot count for today
+    loadScreenshotCount(user.id);
+}
+
+async function loadScreenshotCount(userId) {
+    if (!userId) return;
+    try {
+        const data = await api.getScreenshotCount(userId);
+        const countEl = document.getElementById('detailScreenshots');
+        if (countEl) countEl.textContent = data.count;
+    } catch (err) {
+        console.error("Failed to load screenshot count:", err);
+    }
 }
 
 // ------ Live Feed Management ------
@@ -211,6 +284,9 @@ function updateLiveFeed(type, data) {
     list.classList.add('hidden'); // Ensure Tailwind class is also handled if used elsewhere
     loading.classList.add('hidden');
     if (expandBtn) expandBtn.classList.add('hidden'); // Hide expand button by default
+
+    // Update current mode
+    currentLiveFeedMode = type;
 
     if (type === 'reset') {
         placeholder.style.display = 'block';
@@ -290,12 +366,151 @@ function updateLiveFeed(type, data) {
         if (titleEl) titleEl.textContent = 'Active Applications';
 
     } else if (type === 'browser') {
-        const status = `Browser: ${data.browser} | YouTube: ${data.youtube_open ? 'OPEN' : 'CLOSED'}`;
-        list.innerHTML = `<div class="text-lg text-center mt-10">${status}</div>`;
+        console.log("DEBUG: Received Browser Data:", data);
+
+        let details = data.details;
+        if (typeof details === 'string') {
+            try { details = JSON.parse(details); } catch (e) { console.error("Parse error:", e); }
+        }
+
+        // Store for interactive navigation
+        currentBrowserData = details;
+
+        if (!details || !details.sessions || Object.keys(details.sessions).length === 0) {
+            list.innerHTML = `<div class="text-gray-500 italic p-10 text-center">
+                <i class="fas fa-search-minus text-3xl mb-3 opacity-20"></i>
+                <p>No active browser tabs detected on the client.</p>
+                <p class="text-[10px] mt-2 uppercase tracking-widest text-gray-700">Method used: ${details?.meta?.method || 'Unknown'}</p>
+            </div>`;
+        } else {
+            renderBrowserList();
+        }
+
         list.style.display = 'block';
         list.classList.remove('hidden');
         if (titleEl) titleEl.textContent = 'Browser Activity Monitoring';
     }
+}
+
+/**
+ * Interactive Drill-down: List of Browsers
+ */
+function renderBrowserList() {
+    if (!currentBrowserData) return;
+    const list = document.getElementById('feedList');
+    const sessions = currentBrowserData.sessions || {};
+    const icons = currentBrowserData.icon_meta || {};
+
+    let html = `
+        <div class="mb-4 px-2 flex items-center justify-between">
+            <div class="text-[11px] font-bold text-slate-500 uppercase tracking-[0.2em]">Active Browsers</div>
+            <div class="px-2 py-0.5 rounded-full bg-slate-800 text-[10px] text-slate-400 border border-slate-700">
+                ${Object.keys(sessions).length} detected
+            </div>
+        </div>
+        <div class="grid grid-cols-1 gap-2.5">
+    `;
+
+    const browserNames = Object.keys(sessions).filter(k => k !== 'icon_meta').sort();
+    if (browserNames.length === 0) {
+        html += `
+            <div class="flex flex-col items-center justify-center p-12 text-slate-600 bg-slate-900/40 rounded-2xl border border-dashed border-slate-800">
+                <i class="fas fa-browser text-4xl mb-3 opacity-20"></i>
+                <p class="text-sm">No active browsers detected</p>
+            </div>`;
+    } else {
+        browserNames.forEach(name => {
+            const count = sessions[name].length;
+            const icon = icons[name];
+
+            const iconHtml = icon
+                ? `<div class="relative">
+                     <img src="${icon}" class="w-11 h-11 object-contain rounded-xl p-1.5 bg-slate-800 border border-slate-700 group-hover:border-blue-500/50 transition-colors shadow-lg">
+                   </div>`
+                : `<div class="w-11 h-11 rounded-xl bg-gradient-to-br from-slate-700 to-slate-800 flex items-center justify-center border border-slate-700 group-hover:border-blue-500/50 transition-colors">
+                     <i class="fab fa-${name.toLowerCase().includes('chrome') ? 'chrome' : (name.toLowerCase().includes('edge') ? 'edge' : 'globe')} text-slate-400 text-xl"></i>
+                   </div>`;
+
+            html += `
+                <div onclick="renderTabList('${name}')" 
+                     class="flex items-center justify-between p-4 bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800/80 hover:border-blue-500/40 hover:bg-blue-500/5 cursor-pointer transition-all duration-300 group shadow-sm">
+                    <div class="flex items-center space-x-4">
+                        ${iconHtml}
+                        <div class="min-w-0">
+                            <div class="text-sm font-semibold text-slate-100 group-hover:text-blue-400 transition-colors tracking-tight">${name}</div>
+                            <div class="flex items-center mt-0.5 space-x-2">
+                                <span class="text-[10px] text-slate-500 font-medium uppercase tracking-wider">${count} Open Tabs</span>
+                                <span class="w-1 h-1 rounded-full bg-slate-700"></span>
+                                <span class="text-[10px] text-blue-500/80 font-semibold uppercase">Active Session</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="w-8 h-8 rounded-full flex items-center justify-center bg-slate-800/50 group-hover:bg-blue-500/20 group-hover:text-blue-400 text-slate-600 transition-all">
+                        <i class="fas fa-chevron-right text-[10px]"></i>
+                    </div>
+                </div>
+            `;
+        });
+    }
+
+    html += `</div>`;
+    list.innerHTML = html;
+}
+
+function renderTabList(browserName) {
+    if (!currentBrowserData || !currentBrowserData.sessions[browserName]) return;
+    const list = document.getElementById('feedList');
+    const tabs = currentBrowserData.sessions[browserName];
+
+    let html = `
+        <div class="flex items-center mb-5 pb-3 border-b border-slate-800/50">
+            <button onclick="renderBrowserList()" class="w-8 h-8 rounded-xl bg-slate-800 flex items-center justify-center mr-4 hover:bg-slate-700 hover:text-white transition-all text-slate-400 shadow-sm border border-slate-700">
+                <i class="fas fa-arrow-left text-[10px]"></i>
+            </button>
+            <div class="min-w-0 flex-1">
+                <div class="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Browsing History</div>
+                <div class="text-sm font-bold text-slate-100 truncate">${browserName}</div>
+            </div>
+            <div class="ml-4 px-2.5 py-1 bg-blue-500/10 rounded-lg text-[10px] font-bold text-blue-400 border border-blue-500/20">
+                ${tabs.length} Tabs
+            </div>
+        </div>
+        <div class="space-y-2.5">
+    `;
+
+    tabs.forEach(tab => {
+        const urlStr = tab.url ? `<div class="text-[10px] text-blue-400/70 truncate mt-1 italic tracking-tight">${tab.url}</div>` : '';
+
+        // Use tab icon (favicon) with fallback
+        const tabIconHtml = tab.icon
+            ? `<div class="relative shrink-0">
+                 <img src="${tab.icon}" class="w-9 h-9 object-contain rounded-lg bg-white/5 p-1 border border-slate-700/50 group-hover:border-blue-500/30 transition-colors shadow-sm"
+                      onerror="this.src='https://www.google.com/s2/favicons?sz=64&domain=google.com'">
+               </div>`
+            : `<div class="w-9 h-9 rounded-lg bg-slate-800/80 flex items-center justify-center shrink-0 border border-slate-700/50 group-hover:border-blue-500/30 transition-colors">
+                 <i class="fas fa-globe text-[11px] text-slate-500 group-hover:text-blue-400"></i>
+               </div>`;
+
+        html += `
+            <div class="p-3.5 bg-slate-900/50 backdrop-blur-sm rounded-xl border border-slate-800/50 hover:border-slate-700 hover:bg-slate-800/40 transition-all duration-200 group relative">
+                <div class="flex items-center">
+                    ${tabIconHtml}
+                    <div class="min-w-0 flex-1 ml-4">
+                        <div class="text-xs text-slate-200 font-semibold leading-tight group-hover:text-white transition-colors truncate">${tab.title}</div>
+                        ${urlStr}
+                    </div>
+                    ${tab.is_active ? `
+                        <div class="ml-2 w-1.5 h-1.5 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]"></div>
+                    ` : ''}
+                </div>
+                <!-- Tooltip for full URL on hover -->
+                ${tab.url ? `<div class="absolute inset-0 z-10 opacity-0 bg-transparent" title="${tab.url}"></div>` : ''}
+            </div>
+        `;
+    });
+
+    html += `</div>`;
+    list.innerHTML = html;
 }
 
 
@@ -332,10 +547,13 @@ async function pollForCommandResult(commandId, type, userId) {
 
     commandPollInterval = setInterval(async () => {
         attempts++;
+        const titleEl = document.getElementById('liveFeedTitle');
         if (attempts > maxAttempts) {
             clearInterval(commandPollInterval);
             log(`Timeout waiting for ${type} result.`, 'warning');
             updateLiveFeed('reset');
+            // Update title to show timeout
+            if (titleEl) titleEl.textContent = `${type} Request Timed Out`;
             return;
         }
 
@@ -360,9 +578,8 @@ async function pollForCommandResult(commandId, type, userId) {
 
                     updateLiveFeed('image', imageUrl);
 
-                    // Also update stats card
-                    const countEl = document.getElementById('detailScreenshots');
-                    if (countEl) countEl.textContent = parseInt(countEl.textContent || 0) + 1;
+                    // Refresh screenshot count for today
+                    loadScreenshotCount(userId);
                 }
             } else if (type === 'GET_RUNNING_APPS') {
                 const history = await api.getCommandHistory(userId);
@@ -373,11 +590,13 @@ async function pollForCommandResult(commandId, type, userId) {
                     log(`Apps received: ${appsData.apps.length} running.`, 'success');
                     updateLiveFeed('apps', appsData.apps);
 
-                    // Update stats card
+                    // Update stats card with the actual active application (foreground)
                     const appEl = document.getElementById('detailApp');
                     if (appEl && appsData.apps.length > 0) {
-                        appEl.textContent = appsData.apps[0].name || appsData.apps[0];
-                        appEl.title = appsData.apps[0].name || appsData.apps[0];
+                        // Find the one marked as is_active, or fallback to first
+                        const activeApp = appsData.apps.find(a => a.is_active) || appsData.apps[0];
+                        appEl.textContent = activeApp.name || activeApp;
+                        appEl.title = activeApp.name || activeApp;
                     }
                 } else if (cmd && cmd.status === 'FAILED') {
                     clearInterval(commandPollInterval);
@@ -486,8 +705,13 @@ function toggleNavDrawer() {
 
 // ------ Latest Screenshot Functions ------
 
-async function loadLatestScreenshot(userId) {
+async function loadLatestScreenshot(userId, forceRefresh = false) {
     if (!userId) return;
+
+    // Guard: Don't override if user is looking at Apps or Browser, unless forced (e.g. user selection)
+    if (!forceRefresh && currentLiveFeedMode !== 'image' && currentLiveFeedMode !== 'reset' && currentLiveFeedMode !== 'loading') {
+        return;
+    }
 
     try {
         const data = await api.getLatestScreenshot(userId);

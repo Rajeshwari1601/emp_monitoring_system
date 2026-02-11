@@ -16,10 +16,10 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     devices = relationship("Device", back_populates="owner", cascade="all, delete-orphan")
-    commands = relationship("app.models.data.Command", back_populates="owner", cascade="all, delete-orphan")
-    screenshots = relationship("app.models.data.Screenshot", back_populates="owner", cascade="all, delete-orphan")
-    app_logs = relationship("app.models.data.AppLog", back_populates="owner", cascade="all, delete-orphan")
-    browser_logs = relationship("app.models.data.BrowserLog", back_populates="owner", cascade="all, delete-orphan")
+    commands = relationship("Command", back_populates="owner", cascade="all, delete-orphan")
+    screenshots = relationship("Screenshot", back_populates="owner", cascade="all, delete-orphan")
+    app_logs = relationship("AppLog", back_populates="owner", cascade="all, delete-orphan")
+    browser_logs = relationship("BrowserLog", back_populates="owner", cascade="all, delete-orphan")
 
 class Device(Base):
     __tablename__ = "devices"

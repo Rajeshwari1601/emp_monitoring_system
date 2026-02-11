@@ -11,6 +11,7 @@ import requests
 import win32gui
 import tkinter as tk
 from tkinter import font as tkfont
+from datetime import datetime
 
 from api_client import APIClient
 from config import Config
@@ -24,19 +25,38 @@ class BackgroundService:
     def __init__(self):
         self.api = APIClient()
         self.running = True
+        logger.info(f"BackgroundService initialized for user: {self.api.headers.get('Authorization')[:15]}...")
 
     def start(self):
+        self.last_heartbeat = time.time()
+        self.last_command_poll = time.time()
+        
         # Start Heartbeat Thread
         threading.Thread(target=self.heartbeat_loop, daemon=True).start()
         # Start Command Polling Thread
         threading.Thread(target=self.command_loop, daemon=True).start()
         
-        # Keep main thread alive or allow it to be joined
+        # Keep main thread alive and monitor health
         while self.running:
-            time.sleep(1)
+            self.check_health()
+            time.sleep(5)
+
+    def check_health(self):
+        """Monitors the health of background threads."""
+        now = time.time()
+        # If no heartbeat for 120s, something is wrong
+        if now - self.last_heartbeat > 120:
+            logger.error(f"Heartbeat thread seems stuck! (Last: {now - self.last_heartbeat:.1f}s ago). Restarting...")
+            os._exit(401)
+        
+        # If no command polling for 120s, something is wrong
+        if now - self.last_command_poll > 120:
+            logger.error(f"Command loop seems stuck! (Last: {now - self.last_command_poll:.1f}s ago). Restarting...")
+            os._exit(500)
 
     def heartbeat_loop(self):
         while self.running:
+            self.last_heartbeat = time.time()
             success = self.api.heartbeat()
             if not success:
                # Token likely expired or invalid
@@ -56,10 +76,13 @@ class BackgroundService:
 
     def command_loop(self):
         while self.running:
+            self.last_command_poll = time.time()
             try:
                 commands = self.api.get_commands()
                 for cmd in commands:
-                    self.process_command(cmd)
+                    # Run each command in a separate thread to avoid blocking
+                    logger.info(f"Dispatching command {cmd.get('command')} to thread...")
+                    threading.Thread(target=self.process_command, args=(cmd,), daemon=True).start()
             except Exception as e:
                 logger.error(f"Error in command loop: {e}")
             time.sleep(5)
@@ -73,6 +96,8 @@ class BackgroundService:
                 self.take_screenshot(command_id)
             elif command_type == "GET_RUNNING_APPS":
                 self.get_running_apps(command_id)
+            elif command_type == "GET_BROWSER_STATUS":
+                self.get_browser_status(command_id)
             elif command_type == "SEND_NOTIFICATION":
                 self.show_notification(cmd.get("payload", {}))
             
@@ -122,7 +147,8 @@ class BackgroundService:
                     "title": app['title'],
                     "exe_path": app['exe_path'],
                     "duration": app['duration'],
-                    "icon": app['icon']
+                    "icon": app['icon'],
+                    "is_active": app.get('is_active', False)
                 })
             
             logger.info(f"Found {len(apps)} user-visible applications")
@@ -143,51 +169,99 @@ class BackgroundService:
             logger.error(f"App upload failed: {e}")
 
     def get_browser_status(self, command_id):
-        browser_name = "Unknown"
+        """Captures browser status and tab details."""
+        browsers = {}
         youtube_open = False
-        titles = []
-        
-        def enum_window_callback(hwnd, _):
-            if win32gui.IsWindowVisible(hwnd):
-                title = win32gui.GetWindowText(hwnd)
-                if title:
-                    titles.append(title)
+        method_used = "Basic"
         
         try:
-            win32gui.EnumWindows(enum_window_callback, None)
+            # Try enhanced detection first
+            from browser import get_active_browsers
+            logger.info("Attempting enhanced browser detection...")
+            browsers, youtube_open = get_active_browsers()
+            if browsers:
+                method_used = "Enhanced"
         except Exception as e:
-            logger.error(f"EnumWindows failed: {e}")
+            logger.warning(f"Enhanced browser detection failed: {e}")
 
-        # Check titles
-        for title in titles:
-            lower_title = title.lower()
-            if "chrome" in lower_title or "google chrome" in lower_title:
-                browser_name = "Chrome"
-            elif "edge" in lower_title or "microsoft edge" in lower_title:
-                browser_name = "Edge"
-            elif "firefox" in lower_title or "mozilla firefox" in lower_title:
-                browser_name = "Firefox"
-            elif "brave" in lower_title:
-                browser_name = "Brave"
-            
-            if "youtube" in lower_title:
-                youtube_open = True
-                if browser_name == "Unknown": browser_name = "Detected via YouTube"
+        # If enhanced failed or returned nothing, use basic win32 fallback
+        if not browsers:
+            logger.info("Using basic win32 fallback for browser detection...")
+            browsers, youtube_open = self._get_browser_status_basic_logic()
+
+        # Determine summary browser string
+        if not browsers:
+            browser_summary = "None detected"
+        elif len(browsers) == 1:
+            browser_summary = list(browsers.keys())[0]
+        else:
+            browser_summary = f"Multiple ({', '.join(browsers.keys())})"
 
         # Upload
         url = f"{self.api.base_url}/client/browser/upload"
         payload = {
             "command_id": command_id,
-            "browser": browser_name,
+            "browser": browser_summary,
             "youtube_open": youtube_open,
-            "details": {"titles": titles[:10]} # Send top 10 titles for debug
+            "details": {
+                "sessions": browsers,
+                "meta": {
+                    "method": method_used,
+                    "scanned_at": datetime.now().isoformat()
+                }
+            }
         }
-        logger.debug(f"UPLOADING BROWSER STATUS to {url}")
+        
+        logger.info(f"PREPARING BROWSER PAYLOAD: {payload['browser']} - {len(browsers)} browsers in sessions")
+        logger.debug(f"FULL BROWSER DETAILS: {payload['details']}")
+        
+        logger.info(f"UPLOADING BROWSER STATUS ({method_used}) to {url}")
         try:
             resp = requests.post(url, json=payload, headers=self.api.headers)
-            logger.debug(f"Result: {resp.status_code}")
+            logger.debug(f"Upload Result: {resp.status_code}")
         except Exception as e:
             logger.error(f"Browser upload failed: {e}")
+
+    def _get_browser_status_basic_logic(self):
+        """Helper for win32gui fallback that matches the 'sessions' format."""
+        browsers = {}
+        youtube_open = False
+        current_time = datetime.now().isoformat()
+        
+        def enum_window_callback(hwnd, _):
+            nonlocal youtube_open
+            if win32gui.IsWindowVisible(hwnd):
+                title = win32gui.GetWindowText(hwnd)
+                if not title: return
+                
+                lower_title = title.lower()
+                browser_name = None
+                
+                if "chrome" in lower_title: browser_name = "Chrome"
+                elif "edge" in lower_title: browser_name = "Edge"
+                elif "firefox" in lower_title: browser_name = "Firefox"
+                elif "brave" in lower_title: browser_name = "Brave"
+                
+                if browser_name:
+                    if browser_name not in browsers: browsers[browser_name] = []
+                    browsers[browser_name].append({
+                        "title": title,
+                        "url": None, # Basic detection can't get URLs
+                        "timestamp": current_time,
+                        "browser": browser_name
+                    })
+                
+                if "youtube" in lower_title:
+                    youtube_open = True
+        
+        try:
+            win32gui.EnumWindows(enum_window_callback, None)
+        except:
+            pass
+            
+        return browsers, youtube_open
+
+
 
     def show_notification(self, payload):
         title = payload.get("title", "Notification")

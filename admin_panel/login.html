@@ -89,10 +89,8 @@
             const btn = e.target.querySelector('button');
             const originalBtnText = btn.innerHTML;
 
-            // Simple validation
             if (!email || !password) return;
 
-            // Loading state
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Signing In...';
             btn.disabled = true;
             errorContainer.classList.add('hidden');
@@ -147,17 +145,16 @@
                     // Redirect
                     window.location.href = 'index.html';
                 } else {
-                    throw new Error("No access token received");
+                    throw new Error("Invalid email or password");
                 }
 
             } catch (err) {
                 console.error(err);
-                errorMsg.textContent = err.message;
+                errorMsg.textContent = err.message || "Connection failed. Please check if the server is running.";
                 errorContainer.classList.remove('hidden');
 
-                // Shake animation
                 const card = document.querySelector('.bg-gray-800\\/80');
-                card.classList.add('animate-pulse'); // Simple visual cue
+                card.classList.add('animate-pulse');
                 setTimeout(() => card.classList.remove('animate-pulse'), 500);
 
             } finally {
