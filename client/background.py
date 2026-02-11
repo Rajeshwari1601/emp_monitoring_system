@@ -14,6 +14,7 @@ from tkinter import font as tkfont
 
 from api_client import APIClient
 from config import Config
+from lists_apps import get_running_applications
 
 # Setup logging for this module
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -107,17 +108,26 @@ class BackgroundService:
             logger.error(f"Upload failed: {e}")
 
     def get_running_apps(self, command_id):
-        # Optimize: Get top 50 apps by memory to avoid huge payload
+        # Get only user-visible applications (foreground apps with windows)
         apps = []
         try:
-             # Sort by memory usage
-             for proc in sorted(psutil.process_iter(['pid', 'name', 'memory_info']), key=lambda p: p.info['memory_info'].rss, reverse=True)[:50]:
-                try:
-                    apps.append({"name": proc.info['name'], "pid": proc.info['pid']})
-                except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
-                    pass
+            # Use the new lists_apps functionality to get user-visible applications only
+            visible_apps = get_running_applications()
+            
+            # Format the data for upload
+            for app in visible_apps:
+                apps.append({
+                    "name": app['name'],
+                    "pid": app['pid'],
+                    "title": app['title'],
+                    "exe_path": app['exe_path'],
+                    "duration": app['duration'],
+                    "icon": app['icon']
+                })
+            
+            logger.info(f"Found {len(apps)} user-visible applications")
         except Exception as e:
-             logger.error(f"Error getting apps: {e}")
+            logger.error(f"Error getting apps: {e}")
         
         # Upload
         url = f"{self.api.base_url}/client/apps/upload"

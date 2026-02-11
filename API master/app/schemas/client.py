@@ -45,6 +45,10 @@ class ScreenshotResponse(BaseModel):
 class AppInfo(BaseModel):
     name: str
     pid: int
+    title: Optional[str] = None
+    exe_path: Optional[str] = None
+    icon: Optional[str] = None
+    duration: Optional[str] = None
 
 class AppLogUpload(BaseModel):
     command_id: Optional[str]

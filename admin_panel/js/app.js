@@ -254,10 +254,40 @@ function updateLiveFeed(type, data) {
         if (titleEl) titleEl.textContent = 'Remote Screen Capture';
 
     } else if (type === 'apps') {
-        list.innerHTML = data.map(app => `<div><span class="text-white">[APP]</span> ${app.name || app}</div>`).join('');
+        // Redesigned structured list with Application and Duration columns
+        const header = `
+            <div class="flex items-center justify-between px-4 py-2 border-b border-gray-800 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
+                <div class="flex-1">Application</div>
+                <div class="w-24 text-right">Duration</div>
+            </div>
+        `;
+
+        const rows = data.map(app => {
+            const name = app.name || 'Unknown';
+            const icon = app.icon || 'https://placehold.co/32x32?text=?';
+            const duration = app.duration || '00:00:00';
+
+            return `
+                <div class="flex items-center justify-between px-4 py-3 hover:bg-white/5 transition-colors border-b border-gray-900 last:border-0 group">
+                    <div class="flex items-center flex-1 min-w-0">
+                        <img src="${icon}" class="w-8 h-8 rounded p-0.5 bg-gray-800/50 mr-3 object-contain transition-transform group-hover:scale-110" 
+                             onerror="this.src='https://placehold.co/32x32?text=?'">
+                        <div class="truncate">
+                            <div class="text-sm font-medium text-gray-200">${name}</div>
+                            ${app.title ? `<div class="text-[10px] text-gray-500 truncate mt-0.5">${app.title}</div>` : ''}
+                        </div>
+                    </div>
+                    <div class="w-24 text-right font-mono text-xs text-gray-400 group-hover:text-blue-400 transition-colors">
+                        ${duration}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        list.innerHTML = `<div class="bg-black/40 rounded-lg overflow-hidden border border-gray-800">${header}${rows}</div>`;
         list.style.display = 'block';
         list.classList.remove('hidden');
-        if (titleEl) titleEl.textContent = 'Running Applications';
+        if (titleEl) titleEl.textContent = 'Active Applications';
 
     } else if (type === 'browser') {
         const status = `Browser: ${data.browser} | YouTube: ${data.youtube_open ? 'OPEN' : 'CLOSED'}`;

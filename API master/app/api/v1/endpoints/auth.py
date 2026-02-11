@@ -8,7 +8,7 @@ from app.core import security
 from app.core.config import settings
 from app.models.user import User, Device
 from app.schemas import user as user_schema, token as token_schema
-
+ 
 router = APIRouter()
 
 @router.post("/register", response_model=dict)
