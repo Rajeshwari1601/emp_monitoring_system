@@ -11,7 +11,8 @@ class APIClient:
         self.base_url = Config.API_BASE_URL
         self.token = Config.load_token()
         self.headers = {
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "ngrok-skip-browser-warning": "true"
         }
         if self.token:
             self.headers["Authorization"] = f"Bearer {self.token}"

@@ -1,12 +1,13 @@
 class APIClient {
     constructor() {
-        this.baseUrl = "http://localhost:8000/api/v1";
+        this.baseUrl = "https://nonobstetrically-nonoptical-raymundo.ngrok-free.dev/api/v1";
         this.token = localStorage.getItem('access_token');
     }
 
     async request(endpoint, method = 'GET', body = null) {
         const headers = {
-            'Content-Type': 'application/json'
+            'Content-Type': 'application/json',
+            'ngrok-skip-browser-warning': 'true' // Bypass ngrok warning page
         };
 
         const token = localStorage.getItem('access_token');
@@ -24,7 +25,6 @@ class APIClient {
         }
 
         try {
-            // Fix: Use this.baseUrl
             const response = await fetch(`${this.baseUrl}${endpoint}`, config);
 
             if (response.status === 401) {
@@ -62,7 +62,10 @@ class APIClient {
         // We will check user role after login or let backend handle permissions on subsequent calls.
         const response = await fetch(`${this.baseUrl}/auth/login`, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'ngrok-skip-browser-warning': 'true'
+            },
             body: JSON.stringify({
                 email: email,
                 password: password,
