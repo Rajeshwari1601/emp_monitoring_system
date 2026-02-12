@@ -92,6 +92,41 @@ def send_notification(
     
     return {"success": True}
 
+@router.get("/live/test")
+def test_live_stream_route():
+    return {"message": "Admin Live Stream Route is ACTIVE", "method": "GET", "hint": "Use POST to trigger actually"}
+
+@router.post("/live/start")
+def start_live_stream(
+    cmd_in: client_schema.CommandCreate,
+    current_user: User = Depends(deps.get_current_active_superuser),
+    db: Session = Depends(deps.get_db)
+) -> Any:
+    logger.info(f"API_REQUEST_RECEIVED: POST /admin/live/start for user {cmd_in.user_id} from admin {current_user.id}")
+    cmd = Command(
+        user_id=cmd_in.user_id,
+        command="START_LIVE_STREAM",
+        status="PENDING"
+    )
+    db.add(cmd)
+    db.commit()
+    return {"success": True}
+
+@router.post("/live/stop")
+def stop_live_stream(
+    cmd_in: client_schema.CommandCreate,
+    current_user: User = Depends(deps.get_current_active_superuser),
+    db: Session = Depends(deps.get_db)
+) -> Any:
+    cmd = Command(
+        user_id=cmd_in.user_id,
+        command="STOP_LIVE_STREAM",
+        status="PENDING"
+    )
+    db.add(cmd)
+    db.commit()
+    return {"success": True}
+
 @router.get("/screenshot/{command_id}")
 def get_screenshot(
     command_id: str,

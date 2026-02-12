@@ -1,7 +1,9 @@
 class APIClient {
     constructor() {
-        this.baseUrl = "http://localhost:8000/api/v1";
-        // this.baseUrl = "https://empmonitoring.duckdns.org/api/v1";
+        // this.baseUrl = "http://localhost:8000/api/v1";
+        this.baseUrl = "https://empmonitoring.duckdns.org/api/v1";
+        // this.baseUrl = "https://nonobstetrically-nonoptical-raymundo.ngrok-free.dev/api/v1";
+
         this.token = localStorage.getItem('access_token');
         window.api = this;
     }
@@ -137,6 +139,20 @@ class APIClient {
 
     async getScreenshotCount(userId) {
         return this.request(`/admin/screenshot-count/${userId}`);
+    }
+
+    async startLiveStream(userId) {
+        return this.request('/admin/live/start', 'POST', {
+            user_id: userId,
+            command: 'START_LIVE_STREAM'
+        });
+    }
+
+    async stopLiveStream(userId) {
+        return this.request('/admin/live/stop', 'POST', {
+            user_id: userId,
+            command: 'STOP_LIVE_STREAM'
+        });
     }
 
     async debugLog(message) {

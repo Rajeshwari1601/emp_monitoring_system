@@ -112,8 +112,9 @@
 
                 // However, api.login might handle saving token.
                 // Let's implement a direct fetch to be safe and clear.
-                // const API_URL = 'https://empmonitoring.duckdns.org/api/v1';
-                const API_URL = 'http://localhost:8000/api/v1';
+                const API_URL = 'https://empmonitoring.duckdns.org/api/v1';
+                // const API_URL = 'http://localhost:8000/api/v1';
+                // const API_URL = 'https://nonobstetrically-nonoptical-raymundo.ngrok-free.dev/api/v1';
 
                 const response = await fetch(`${API_URL}/auth/login`, {
                     method: 'POST',

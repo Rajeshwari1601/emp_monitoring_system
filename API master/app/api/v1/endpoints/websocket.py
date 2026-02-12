@@ -132,12 +132,20 @@ async def websocket_admin_endpoint(
         await websocket.close(code=4001)
         return
 
+    logger.info(f"Admin {admin_user.id} authorized to watch {target_user_id}. Accepting connection...")
     await manager.connect_admin(websocket, target_user_id)
     await websocket.accept()
+    logger.info(f"WebSocket accepted for admin watching {target_user_id}")
     
     redis = get_async_redis()
     pubsub = redis.pubsub()
-    await pubsub.subscribe(f"live_stream:{target_user_id}")
+    try:
+        logger.info(f"Subscribing to Redis channel: live_stream:{target_user_id}")
+        await pubsub.subscribe(f"live_stream:{target_user_id}")
+        logger.info(f"Successfully subscribed to live_stream:{target_user_id}")
+    except Exception as e:
+        logger.error(f"CRITICAL: Failed to subscribe to Redis for {target_user_id}: {e}")
+        # We don't close the socket, but the admin will see no data.
     
     async def redis_listener():
         try:

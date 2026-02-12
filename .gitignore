@@ -25,3 +25,6 @@ server_error.log
 API master/static/
 static/
 API master.zip
+check_redis.py
+check_routes.py
+API master/backend.log

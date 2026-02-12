@@ -74,6 +74,11 @@
         <header class="h-16 bg-white flex items-center justify-between px-6 z-20 shrink-0 border-b border-gray-200">
             <div class="flex items-center space-x-4">
                 <h1 class="text-lg font-bold text-gray-700">Monitor Dashboard</h1>
+                <div id="connectionStatus"
+                    class="flex items-center space-x-2 px-3 py-1 bg-gray-100 rounded-full border border-gray-200">
+                    <div class="h-2 w-2 rounded-full bg-gray-400"></div>
+                    <span class="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Checking...</span>
+                </div>
                 <span id="selectedUserNameHeader"
                     class="hidden px-3 py-1 bg-blue-100 text-blue-600 rounded-full text-xs font-bold">
                     -
@@ -238,6 +243,10 @@
             <a href="#" class="block px-4 py-3 bg-slate-800 rounded text-blue-400 font-bold">Dashboard</a>
             <a href="#" class="block px-4 py-3 hover:bg-slate-800 rounded text-gray-300">Profile</a>
             <a href="#" class="block px-4 py-3 hover:bg-slate-800 rounded text-gray-300">Settings</a>
+            <a href="#" onclick="runApiDiagnostics()"
+                class="block px-4 py-3 hover:bg-blue-900/20 rounded text-blue-300 border border-blue-800/20 bg-blue-900/10">
+                <i class="fas fa-microscope mr-2"></i> API Diagnostics
+            </a>
             <div class="border-t border-slate-800 my-4"></div>
             <a href="#" id="logoutBtn" class="block px-4 py-3 text-red-400 hover:bg-red-500/10 rounded">Logout</a>
         </nav>

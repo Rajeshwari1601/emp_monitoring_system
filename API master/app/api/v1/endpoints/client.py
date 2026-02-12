@@ -24,9 +24,16 @@ def heartbeat(
     current_user: User = Depends(deps.get_current_user),
     redis = Depends(get_redis)
 ) -> Any:
+    # Diagnostic Log
+    logger.info(f"HEARTBEAT_ENTERED for user: {current_user.id}")
     # Update Redis
     # PRD: online:{user_id} -> timestamp (TTL 30s)
-    redis.setex(f"online:{current_user.id}", 30, "online")
+    try:
+        redis.setex(f"online:{current_user.id}", 30, "online")
+    except Exception as e:
+        logger.error(f"Redis connection failed during heartbeat: {e}")
+        # We don't want to crash the whole heartbeat just because Redis is down
+        # Online status in dashboard might be affected, but client can still function
     return {"success": True}
 
 @router.get("/commands", response_model=List[client_schema.CommandSchema])
