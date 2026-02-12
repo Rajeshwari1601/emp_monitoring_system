@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     DATABASE_URL: Optional[str] = None
 
     # Redis
-    REDIS_HOST: str = "localhost"
+    REDIS_HOST: str = "150.241.245.84"
     REDIS_PORT: int = 6379
     REDIS_DB: int = 0
     

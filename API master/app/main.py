@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.api import api_router
 from app.core.database import engine, Base
-
+from app.api.v1.endpoints import websocket
 import logging
 import sys
 
@@ -65,9 +65,21 @@ async def global_exception_handler(request, exc):
     logger.error(traceback.format_exc())
     return JSONResponse(
         status_code=500,
-        content={"detail": "Internal Server Error", "error": str(exc)}
+        content={"detail": "Internal Server Error", "error": f"API_FIX_MARK_1: {str(exc)}"}
     )
 
 @app.get("/")
 def read_root():
+    # Print all registered routes for debugging
+    # for route in app.routes:
+    #    logger.info(f"ROUTE: {route.path} (Name: {route.name})")
     return {"message": "Welcome to Windows Monitoring System API"}
+
+# Diagnostic: Log all routes on startup
+@app.on_event("startup")
+async def startup_event():
+    logger.info("--- REGISTERED ROUTES ---")
+    for route in app.routes:
+        if hasattr(route, "path"):
+            logger.info(f"Registered Route: {route.path}")
+    logger.info("--------------------------")
