@@ -1,7 +1,9 @@
 class APIClient {
     constructor() {
-        this.baseUrl = "https://nonobstetrically-nonoptical-raymundo.ngrok-free.dev/api/v1";
+        this.baseUrl = "http://localhost:8000/api/v1";
+        // this.baseUrl = "https://empmonitoring.duckdns.org/api/v1";
         this.token = localStorage.getItem('access_token');
+        window.api = this;
     }
 
     async request(endpoint, method = 'GET', body = null) {
@@ -135,6 +137,16 @@ class APIClient {
 
     async getScreenshotCount(userId) {
         return this.request(`/admin/screenshot-count/${userId}`);
+    }
+
+    async debugLog(message) {
+        try {
+            await fetch(`${this.baseUrl}/admin/debug-log`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message })
+            });
+        } catch (e) { }
     }
 
     logout() {

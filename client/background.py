@@ -16,15 +16,17 @@ from datetime import datetime
 from api_client import APIClient
 from config import Config
 from lists_apps import get_running_applications
+from streamer import start_stream_service
 
 # Setup logging for this module
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("Background")
 
 class BackgroundService:
-    def __init__(self):
+    def __init__(self, screen_lock=None):
         self.api = APIClient()
         self.running = True
+        self.screen_lock = screen_lock if screen_lock else threading.Lock()
         logger.info(f"BackgroundService initialized for user: {self.api.headers.get('Authorization')[:15]}...")
 
     def start(self):

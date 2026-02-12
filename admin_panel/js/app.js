@@ -1,10 +1,11 @@
 const api = new APIClient();
+window.api = api;
 let currentUserId = null;
 let commandPollInterval = null;
 let currentBrowserData = null; // Added for browser drill-down
 let allUsersData = [];
 let onlineUsersData = [];
-let currentLiveFeedMode = 'reset'; // Tracks what's currently shown in Live Feed
+window.currentLiveFeedMode = 'reset'; // Tracks what's currently shown in Live Feed
 
 // Initialization
 document.addEventListener('DOMContentLoaded', () => {
@@ -31,61 +32,67 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initCharts() {
     // Pie Chart: Applications Usage
-    const ctxPie = document.getElementById('appsChart').getContext('2d');
-    new Chart(ctxPie, {
-        type: 'doughnut',
-        data: {
-            labels: ['Chrome', 'Word', 'Slack', 'Others'],
-            datasets: [{
-                data: [45, 25, 20, 10],
-                backgroundColor: [
-                    '#ef4444', // Red (Chrome)
-                    '#8b5cf6', // Purple (Word)
-                    '#3b82f6', // Blue (Slack)
-                    '#1f2937'  // Dark (Others)
-                ],
-                borderWidth: 0,
-                hoverOffset: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: {
-                    position: 'right',
-                    labels: { boxWidth: 10, font: { size: 10 } }
-                }
+    const appsEl = document.getElementById('appsChart');
+    if (appsEl) {
+        const ctxPie = appsEl.getContext('2d');
+        new Chart(ctxPie, {
+            type: 'doughnut',
+            data: {
+                labels: ['Chrome', 'Word', 'Slack', 'Others'],
+                datasets: [{
+                    data: [45, 25, 20, 10],
+                    backgroundColor: [
+                        '#ef4444', // Red (Chrome)
+                        '#8b5cf6', // Purple (Word)
+                        '#3b82f6', // Blue (Slack)
+                        '#1f2937'  // Dark (Others)
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 4
+                }]
             },
-            cutout: '70%'
-        }
-    });
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: { boxWidth: 10, font: { size: 10 } }
+                    }
+                },
+                cutout: '70%'
+            }
+        });
+    }
 
     // Bar Chart: Weekly Active Hours
-    const ctxBar = document.getElementById('hoursChart').getContext('2d');
-    new Chart(ctxBar, {
-        type: 'bar',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-            datasets: [{
-                label: 'Hours',
-                data: [6, 8, 7, 5, 8],
-                backgroundColor: '#3b82f6',
-                borderRadius: 4
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            scales: {
-                y: { beginAtZero: true, grid: { display: false }, ticks: { display: false } },
-                x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+    const hoursEl = document.getElementById('hoursChart');
+    if (hoursEl) {
+        const ctxBar = hoursEl.getContext('2d');
+        new Chart(ctxBar, {
+            type: 'bar',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+                datasets: [{
+                    label: 'Hours',
+                    data: [6, 8, 7, 5, 8],
+                    backgroundColor: '#3b82f6',
+                    borderRadius: 4
+                }]
             },
-            plugins: {
-                legend: { display: false }
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: true, grid: { display: false }, ticks: { display: false } },
+                    x: { grid: { display: false }, ticks: { font: { size: 10 } } }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
             }
-        }
-    });
+        });
+    }
 }
 
 async function checkAuth() {
@@ -138,7 +145,6 @@ async function loadDashboard() {
         }
     }
 }
-
 function updateStats(onlineCount, totalCount) {
     const offlineCount = Math.max(0, totalCount - onlineCount);
 
@@ -155,6 +161,7 @@ function updateStats(onlineCount, totalCount) {
     // Detail View Stats (if user selected)
     // Here we might fetch specific details later
 }
+
 
 function renderUserList(allUsers, onlineUsers, filterText = '') {
     const listContainer = document.getElementById('usersList');
@@ -211,6 +218,11 @@ function selectUser(user, isOnline) {
         commandPollInterval = null;
     }
 
+    // Stop and clear any active live stream from previous user
+    if (window.liveStreamManager) {
+        window.liveStreamManager.stop();
+    }
+
     // UI Updates
     document.getElementById('noUserSelected').classList.add('hidden');
     document.getElementById('userDashboard').classList.remove('hidden');
@@ -260,8 +272,6 @@ async function loadScreenshotCount(userId) {
     }
 }
 
-// ------ Live Feed Management ------
-
 function updateLiveFeed(type, data) {
     const container = document.getElementById('liveFeedContainer');
     const placeholder = document.getElementById('feedPlaceholder');
@@ -273,6 +283,12 @@ function updateLiveFeed(type, data) {
 
     if (!container || !placeholder || !image || !list || !loading) {
         console.error("Critical elements missing for Live Feed updates");
+        return;
+    }
+
+    // GUARD: If currently in LIVE mode, do not allow other updates to overwrite it
+    if (window.currentLiveFeedMode === 'live' && type !== 'live' && type !== 'reset') {
+        console.log("Blocking UI update: Live stream is active");
         return;
     }
 

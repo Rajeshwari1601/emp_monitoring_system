@@ -1,5 +1,5 @@
 fastapi
-uvicorn
+uvicorn[standard]
 sqlalchemy
 psycopg2-binary
 redis
@@ -10,3 +10,4 @@ bcrypt==4.0.1
 pydantic
 pydantic-settings
 python-dotenv
+websockets
