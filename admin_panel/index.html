@@ -170,9 +170,18 @@
                         </div>
 
                         <button onclick="showNotifyModal()"
-                            class="w-full p-4 bg-gray-800 hover:bg-gray-900 text-white rounded-xl shadow-md transition-all duration-300 mt-4 flex items-center justify-center space-x-2 hover:shadow-lg">
+                            class="w-full p-4 bg-gray-800 hover:bg-gray-900 text-white rounded-xl shadow-md transition-all duration-300 mt-4 flex items-center justify-center space-x-2 hover:shadow-lg mb-4">
                             <i class="fas fa-paper-plane"></i>
                             <span class="font-bold">Send Message</span>
+                        </button>
+
+                        <button onclick="liveStreamManager.start(currentUserId)"
+                            class="for-live-stream w-full flex items-center justify-between p-4 bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 group transform hover:-translate-y-0.5 mt-2">
+                            <span class="font-bold tracking-wide"><i
+                                    class="fas fa-video mr-3 group-hover:rotate-12 transition-transform duration-300"></i>
+                                <span>Start Live Stream</span></span>
+                            <i
+                                class="fas fa-chevron-right opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all"></i>
                         </button>
                     </div>
                 </div>
@@ -196,9 +205,7 @@
                             <i class="fas fa-video-slash text-4xl mb-3 opacity-50"></i>
                             <p class="text-sm">Action Output Display</p>
                         </div>
-                        <img id="feedImage"
-                            style="display:none; max-width: 100%; max-height: 100%; object-fit: contain;" src=""
-                            alt="Live Feed">
+                        <img id="feedImage" class="hidden max-w-full max-h-full object-contain" src="" alt="Live Feed">
                         <div id="feedList"
                             class="hidden w-full h-full p-4 text-green-400 font-mono text-xs overflow-auto"></div>
                         <div id="feedLoading"
@@ -270,7 +277,24 @@
     <div id="navOverlay" onclick="toggleNavDrawer()" class="fixed inset-0 bg-black/50 z-40 hidden backdrop-blur-sm">
     </div>
 
+    <script>
+        window.onerror = function (msg, url, lineNo, columnNo, error) {
+            const message = `ERROR: ${msg} at ${lineNo}:${columnNo} of ${url}`;
+            if (window.api && window.api.debugLog) {
+                window.api.debugLog(message);
+            }
+            console.error(message);
+            return false;
+        };
+        window.onunhandledrejection = function (event) {
+            const message = `REJECTION: ${event.reason}`;
+            if (window.api && window.api.debugLog) {
+                window.api.debugLog(message);
+            }
+        };
+    </script>
     <script src="js/api.js"></script>
+    <script src="js/live_feed.js"></script>
     <script src="js/app.js"></script>
 </body>
 

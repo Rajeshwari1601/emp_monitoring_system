@@ -6,3 +6,5 @@ pyautogui
 pywin32
 tk
 uiautomation
+websocket-client
+mss

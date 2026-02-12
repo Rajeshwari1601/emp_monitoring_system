@@ -10,6 +10,9 @@ from app.core.redis import get_redis
 from app.models.user import User, Device
 from app.models.data import Command, Screenshot, AppLog, BrowserLog
 from app.schemas import user as user_schema, client as client_schema
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -212,3 +215,7 @@ def get_screenshot_count(
     ).count()
     
     return {"count": count}
+@router.post("/debug-log")
+async def debug_log(data: dict):
+    logger.info(f"FRONTEND_LOG: {data.get('message')}")
+    return {"status": "ok"}

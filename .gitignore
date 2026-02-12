@@ -24,3 +24,4 @@ server_error.log
 # Data
 API master/static/
 static/
+API master.zip
