@@ -6,8 +6,21 @@ import subprocess
 class Config:
     # API_BASE_URL = "http://localhost:8000/api/v1"
     API_BASE_URL = "https://empmonitoring.duckdns.org/api/v1"
-    TOKEN_FILE = "client_token.key"
+    # API_BASE_URL = "https://nonobstetrically-nonoptical-raymundo.ngrok-free.dev/api/v1"
     
+    # Persistent storage for the token and logs
+    APP_DATA_DIR = os.path.join(os.getenv('APPDATA', os.path.expanduser('~')), "EmployeeMonitoring")
+    TOKEN_FILE = os.path.join(APP_DATA_DIR, "client_token.key")
+    LOG_FILE = os.path.join(APP_DATA_DIR, "client.log")
+    
+    @staticmethod
+    def _ensure_data_dir():
+        if not os.path.exists(Config.APP_DATA_DIR):
+            try:
+                os.makedirs(Config.APP_DATA_DIR)
+            except Exception as e:
+                print(f"Error creating data directory: {e}")
+
     @staticmethod
     def get_device_id():
         try:
@@ -38,12 +51,14 @@ class Config:
 
     @staticmethod
     def save_token(token_data):
+        Config._ensure_data_dir()
         with open(Config.TOKEN_FILE, "w") as f:
             # In prod, encrypt this
             f.write(token_data)
 
     @staticmethod
     def load_token():
+        Config._ensure_data_dir()
         if os.path.exists(Config.TOKEN_FILE):
             with open(Config.TOKEN_FILE, "r") as f:
                 return f.read().strip()
