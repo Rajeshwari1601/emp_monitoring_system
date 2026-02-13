@@ -11,6 +11,7 @@ import base64
 import os
 import uuid
 import logging
+from datetime import datetime
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -136,4 +137,41 @@ def upload_browser(
     )
     db.add(log)
     db.commit()
+    return {"success": True}
+@router.post("/notification/reply", response_model=dict)
+def notify_reply(
+    reply_in: client_schema.NotificationReply,
+    current_user: User = Depends(deps.get_current_user),
+    db: Session = Depends(deps.get_db),
+    redis = Depends(get_redis)
+) -> Any:
+    cmd = db.query(Command).filter(Command.id == reply_in.command_id).first()
+    if not cmd:
+        raise HTTPException(status_code=404, detail="Command not found")
+    
+    # Update command with reply
+    if not cmd.payload:
+        cmd.payload = {}
+    
+    # Store reply in payload
+    updated_payload = dict(cmd.payload)
+    updated_payload["reply"] = reply_in.message
+    updated_payload["replied_at"] = datetime.now().isoformat()
+    cmd.payload = updated_payload
+    cmd.status = "REPLIED"
+    
+    db.commit()
+    logger.info(f"Notification reply stored for command {cmd.id} from user {current_user.name}")
+
+    # Publish to a global events channel for admins
+    event_data = {
+        "type": "NOTIFICATION_REPLY",
+        "user_id": current_user.id,
+        "user_name": current_user.name,
+        "command_id": cmd.id,
+        "message": reply_in.message
+    }
+    published = redis.publish("admin_events", json.dumps(event_data))
+    logger.info(f"Published reply event to Redis 'admin_events'. Subscribers: {published}")
+    
     return {"success": True}

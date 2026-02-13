@@ -77,15 +77,18 @@ class LiveStreamManager {
             try {
                 const url = new URL(window.api.baseUrl);
                 host = url.host;
+                // Update protocol based on baseUrl
+                protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
             } catch (e) {
                 console.error("Failed to parse API base URL for stream:", e);
             }
         } else if (window.location.protocol !== 'file:') {
             host = window.location.host;
+            protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
         }
 
         const token = localStorage.getItem('access_token');
-        const wsUrl = `wss://${host}/api/v1/ws/admin/${this.activeUserId}?token=${token}`;
+        const wsUrl = `${protocol}//${host}/api/v1/ws/admin/${this.activeUserId}?token=${token}`;
 
         if (window.api) window.api.debugLog(`Attempting WS to: ${wsUrl}`);
 
@@ -108,7 +111,7 @@ class LiveStreamManager {
             window.currentLiveFeedMode = 'live';
 
             if (this.titleEl) {
-                this.titleEl.innerHTML = '<i class="fas fa-video text-red-500 mr-2 animate-pulse"></i> LIVE STREAMING';
+                this.titleEl.innerHTML = '<i class="fas fa-video text-emerald-500 mr-2 animate-pulse"></i> LIVE STREAMING';
             }
         };
 
@@ -200,14 +203,14 @@ class LiveStreamManager {
 
         if (isStreaming) {
             if (text) text.innerText = 'Stop Live Stream';
-            this.streamBtn.classList.add('bg-gray-800');
-            this.streamBtn.classList.remove('bg-red-600');
+            this.streamBtn.classList.add('bg-gray-900', 'text-white');
+            this.streamBtn.classList.remove('bg-emerald-600', 'bg-emerald-600/10', 'text-emerald-600');
             this.streamBtn.classList.add('animate-pulse');
         } else {
             if (text) text.innerText = 'Start Live Stream';
-            this.streamBtn.classList.remove('bg-gray-800');
-            this.streamBtn.classList.add('bg-red-600');
-            this.streamBtn.classList.remove('animate-pulse');
+            this.streamBtn.classList.remove('bg-gray-900', 'text-white', 'animate-pulse');
+            this.streamBtn.classList.add('bg-emerald-600', 'text-white');
+            this.streamBtn.classList.remove('bg-emerald-600/10', 'text-emerald-600');
         }
     }
 }

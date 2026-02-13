@@ -192,20 +192,21 @@ function renderUserList(allUsers, onlineUsers, filterText = '') {
         const isOnline = onlineIds.has(user.id);
         const el = document.createElement('div');
         // Match Sidebar styling
-        el.className = `px-4 py-3 cursor-pointer text-sm flex items-center justify-between group transition-colors duration-200 ${currentUserId === user.id ? 'bg-slate-800 border-l-4 border-blue-500' : 'hover:bg-slate-800 border-l-4 border-transparent'}`;
+        // High contrast light theme sidebar items
+        el.className = `px-4 py-3 cursor-pointer text-sm flex items-center justify-between group transition-colors duration-200 ${currentUserId === user.id ? 'bg-blue-50 border-l-4 border-blue-600' : 'hover:bg-gray-50 border-l-4 border-transparent'}`;
         el.onclick = () => selectUser(user, isOnline);
 
         el.innerHTML = `
             <div class="flex items-center w-full">
                 <div class="relative mr-3">
-                    <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-xs font-bold text-slate-300 border border-slate-600">
+                    <div class="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-700 border border-gray-200">
                         ${(user.name || 'U').charAt(0).toUpperCase()}
                     </div>
-                    <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-slate-900 ${isOnline ? 'bg-green-500' : 'bg-slate-500'}"></div>
+                    <div class="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-white ${isOnline ? 'bg-green-500' : 'bg-gray-300'}"></div>
                 </div>
                 <div class="min-w-0 flex-1">
-                    <h4 class="font-medium text-slate-200 truncate group-hover:text-white transition">${user.name}</h4>
-                    <p class="text-xs text-slate-500 truncate">${user.email}</p>
+                    <h4 class="font-bold text-gray-900 underline-offset-2 decoration-blue-500/30 group-hover:text-blue-600 transition truncate">${user.name}</h4>
+                    <p class="text-xs text-gray-500 truncate font-medium">${user.email}</p>
                 </div>
                 <i class="fas fa-chevron-right text-xs text-slate-600 group-hover:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity"></i>
             </div>
@@ -648,6 +649,37 @@ async function pollForCommandResult(commandId, type, userId) {
 function showNotifyModal() {
     if (!currentUserId) return;
     document.getElementById('notifyModal').classList.remove('hidden');
+}
+
+// ------ Admin Notification Toast Functions ------
+function showAdminToast(userName, message) {
+    const toast = document.getElementById('adminNotificationToast');
+    const userEl = document.getElementById('adminToastUser');
+    const msgEl = document.getElementById('adminToastMsg');
+
+    if (!toast || !userEl || !msgEl) return;
+
+    userEl.textContent = userName;
+    msgEl.textContent = message;
+
+    // Show toast
+    toast.classList.remove('translate-y-24', 'opacity-0');
+    toast.classList.add('translate-y-0', 'opacity-100');
+
+    // Auto hide after 8 seconds
+    if (window.adminToastTimeout) clearTimeout(window.adminToastTimeout);
+    window.adminToastTimeout = setTimeout(() => hideAdminToast(), 8000);
+
+    // Also log it
+    log(`${userName}: ${message}`, 'success');
+}
+
+function hideAdminToast() {
+    const toast = document.getElementById('adminNotificationToast');
+    if (toast) {
+        toast.classList.remove('translate-y-0', 'opacity-100');
+        toast.classList.add('translate-y-24', 'opacity-0');
+    }
 }
 
 function closeNotifyModal() { // Renamed to match HTML call? Wait, HTML calls document.getElementById... hidden.

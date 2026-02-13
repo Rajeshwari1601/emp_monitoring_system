@@ -5,7 +5,6 @@ import subprocess
 
 class Config:
     # API_BASE_URL = "http://localhost:8000/api/v1"
-    #API_BASE_URL = "https://nonobstetrically-nonoptical-raymundo.ngrok-free.dev/api/v1"
     API_BASE_URL = "https://empmonitoring.duckdns.org/api/v1"
     TOKEN_FILE = "client_token.key"
     

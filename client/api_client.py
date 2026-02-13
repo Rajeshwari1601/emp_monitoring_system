@@ -117,11 +117,18 @@ class APIClient:
         except:
             pass
 
-    def upload_screenshot(self, command_id, image_base64):
-        # NOT used currently because background.py implements explicit request logic?
-        # Actually background.py was NOT updated to use this method, it inlined request.
-        # But wait, I added logging here. Background.py logic needs to be updated or I should rely on print in background.py 
-        # Background.py prints exceptions.
-        # Let's add logging support to the manual requests in Background.py or better, move logic here?
-        # Moving logic here is cleaner.
-        pass
+    def send_notification_reply(self, command_id, message):
+        if not self.token: return False
+        url = f"{self.base_url}/client/notification/reply"
+        payload = {
+            "command_id": command_id,
+            "message": message
+        }
+        self._log_request("POST", url, payload)
+        try:
+            response = requests.post(url, json=payload, headers=self.headers)
+            self._log_response(response)
+            return response.status_code == 200
+        except Exception as e:
+            logger.error(f"Failed to send notification reply: {e}")
+            return False

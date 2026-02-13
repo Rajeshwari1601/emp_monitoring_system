@@ -151,9 +151,16 @@ async def websocket_admin_endpoint(
         try:
             async for message in pubsub.listen():
                 if message['type'] == 'message':
-                    await websocket.send_bytes(message['data'])
+                    try:
+                        await websocket.send_bytes(message['data'])
+                    except Exception as e:
+                        logger.error(f"Error sending bytes to admin watching {target_user_id}: {e}")
+                        break # Exit listener if we can't send
         except Exception as e:
             logger.debug(f"Redis listener for admin watching {target_user_id} stopped: {e}")
+        finally:
+            # Ensure socket is closed or cleanup is signaled
+            logger.info(f"Redis listener for {target_user_id} ending.")
 
     # Start the redis listener in the background
     listener_task = asyncio.create_task(redis_listener())
@@ -172,3 +179,63 @@ async def websocket_admin_endpoint(
         await pubsub.unsubscribe(f"live_stream:{target_user_id}")
         await pubsub.close()
         manager.disconnect_admin(websocket, target_user_id)
+@router.websocket("/events")
+async def websocket_events_endpoint(
+    websocket: WebSocket,
+    token: Optional[str] = Query(None)
+):
+    """
+    Global Admin Events Endpoint.
+    URL: ws://HOST/api/v1/ws/events?token=JWT
+    """
+    logger.info(f"Admin Events connection attempt triggered. Token provided: {'Yes' if token else 'No'}")
+    if not token:
+        logger.warning("No token provided for Admin Events WebSocket")
+        await websocket.accept()
+        await websocket.close(code=4001)
+        return
+
+    db = next(get_db())
+    try:
+        admin_user = get_user_from_token(token, db)
+    finally:
+        db.close()
+    
+    if not admin_user or not admin_user.is_superuser:
+        logger.warning(f"Unauthorized admin access attempt to events. Admin user: {admin_user.id if admin_user else 'None'}")
+        await websocket.accept()
+        await websocket.close(code=4001)
+        return
+
+    logger.info(f"Admin {admin_user.id} authorized for events. Accepting connection...")
+    await websocket.accept()
+    
+    redis = get_async_redis()
+    pubsub = redis.pubsub()
+    try:
+        await pubsub.subscribe("admin_events")
+        logger.info(f"Subscribed to 'admin_events' channel for admin {admin_user.id}")
+        
+        async def redis_listener():
+            try:
+                async for message in pubsub.listen():
+                    if message['type'] == 'message':
+                        logger.debug(f"Event received in listener: {message['data'].decode('utf-8')}")
+                        await websocket.send_text(message['data'].decode('utf-8'))
+            except Exception as e:
+                logger.debug(f"Event listener stopped for admin {admin_user.id}: {e}")
+
+        listener_task = asyncio.create_task(redis_listener())
+
+        try:
+            while True:
+                # Keep connection alive
+                await websocket.receive_text()
+        except WebSocketDisconnect:
+            logger.info(f"Admin {admin_user.id} disconnected from events")
+        finally:
+            listener_task.cancel()
+            await pubsub.unsubscribe("admin_events")
+            logger.info(f"Unsubscribed from 'admin_events' for admin {admin_user.id}")
+    finally:
+        await pubsub.close()
