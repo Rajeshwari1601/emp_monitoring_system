@@ -6,6 +6,46 @@ class APIClient {
 
         this.token = localStorage.getItem('access_token');
         window.api = this;
+        this.initEventListeners();
+    }
+
+    initEventListeners() {
+        if (!this.token) return;
+
+        let protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        let host = 'localhost:8000';
+        if (this.baseUrl.includes('localhost') || this.baseUrl.includes('127.0.0.1')) {
+            protocol = 'ws:';
+        }
+        try {
+            const url = new URL(this.baseUrl);
+            host = url.host;
+        } catch (e) { }
+
+        const wsUrl = `${protocol}//${host}/api/v1/ws/events?token=${this.token}`;
+        console.log("Connecting to Admin Events:", wsUrl);
+
+        const ws = new WebSocket(wsUrl);
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                if (data.type === 'NOTIFICATION_REPLY') {
+                    showAdminToast(data.user_name, data.message);
+                }
+            } catch (e) {
+                console.error("Failed to parse event data:", e);
+            }
+        };
+
+        ws.onerror = (error) => {
+            console.error("Admin Events WebSocket Error:", error);
+            if (window.log) window.log("Events WebSocket Error - Check Auth", "error");
+        };
+
+        ws.onclose = () => {
+            console.log("Admin Events WebSocket closed. Reconnecting in 5s...");
+            setTimeout(() => this.initEventListeners(), 5000);
+        };
     }
 
     async request(endpoint, method = 'GET', body = null) {

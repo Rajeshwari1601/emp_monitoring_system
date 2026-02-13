@@ -68,3 +68,7 @@ class NotifySchema(BaseModel):
     user_id: str
     title: str
     message: str
+
+class NotificationReply(BaseModel):
+    command_id: str
+    message: str

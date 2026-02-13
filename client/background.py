@@ -102,7 +102,7 @@ class BackgroundService:
             elif command_type == "GET_BROWSER_STATUS":
                 self.get_browser_status(command_id)
             elif command_type == "SEND_NOTIFICATION":
-                self.show_notification(cmd.get("payload", {}))
+                self.show_notification(cmd.get("payload", {}), command_id)
             elif command_type == "START_LIVE_STREAM":
                 self.start_live_stream()
             elif command_type == "STOP_LIVE_STREAM":
@@ -297,60 +297,57 @@ class BackgroundService:
 
 
 
-    def show_notification(self, payload):
+    def show_notification(self, payload, command_id):
         title = payload.get("title", "Notification")
         message = payload.get("message", "Message from Admin")
         
-        # Use Tkinter for a custom, better-looking UI
         def show():
             root = tk.Tk()
             root.title(title)
-            
-            # Remove window decorations (borderless) for modern look
             root.overrideredirect(True)
             root.attributes('-topmost', True)
             
-            # Simple Dark Theme
-            bg_color = "#1f2937" # Gray-800
-            text_color = "#f3f4f6" # Gray-100
-            dataset_color = "#374151" # Gray-700
-            blue_color = "#2563eb" # Blue-600
+            bg_color = "#1f2937" 
+            text_color = "#f3f4f6"
+            blue_color = "#2563eb"
+            emerald_color = "#10b981"
             
             root.configure(bg=bg_color)
+            w, h = 450, 320
+            ws, hs = root.winfo_screenwidth(), root.winfo_screenheight()
+            root.geometry('%dx%d+%d+%d' % (w, h, (ws/2)-(w/2), (hs/2)-(h/2)))
             
-            # Dimensions
-            w = 400
-            h = 250
-            
-            # Center on screen
-            ws = root.winfo_screenwidth()
-            hs = root.winfo_screenheight()
-            x = (ws/2) - (w/2)
-            y = (hs/2) - (h/2)
-            root.geometry('%dx%d+%d+%d' % (w, h, x, y))
-            
-            # add shadow/border effect (simple border frame)
             frame = tk.Frame(root, bg=bg_color, highlightbackground="#4b5563", highlightthickness=2)
             frame.pack(fill=tk.BOTH, expand=True)
 
-            # Title
-            lbl_title = tk.Label(frame, text=title, bg=bg_color, fg=blue_color, font=("Segoe UI", 16, "bold"), pady=15)
-            lbl_title.pack(fill=tk.X)
+            tk.Label(frame, text=title, bg=bg_color, fg=blue_color, font=("Segoe UI", 14, "bold"), pady=10).pack(fill=tk.X)
+            tk.Label(frame, text=message, bg=bg_color, fg=text_color, font=("Segoe UI", 10), wraplength=400).pack(pady=10, padx=20)
             
-            # Message
-            lbl_msg = tk.Label(frame, text=message, bg=bg_color, fg=text_color, font=("Segoe UI", 11), wraplength=350, justify=tk.CENTER)
-            lbl_msg.pack(expand=True, fill=tk.BOTH, padx=20)
+            # Reply Section
+            reply_frame = tk.Frame(frame, bg=bg_color, padx=20)
+            reply_frame.pack(fill=tk.X, pady=10)
             
-            # Close Button
-            def close_win():
+            reply_entry = tk.Entry(reply_frame, bg="#374151", fg="white", insertbackground="white", 
+                                  relief=tk.FLAT, font=("Segoe UI", 10))
+            reply_entry.pack(fill=tk.X, pady=(0, 10), ipady=8)
+            reply_entry.insert(0, "Type your reply...")
+            reply_entry.bind("<FocusIn>", lambda e: reply_entry.delete(0, tk.END) if reply_entry.get() == "Type your reply..." else None)
+
+            def send_reply():
+                reply_text = reply_entry.get().strip()
+                if reply_text and reply_text != "Type your reply...":
+                    success = self.api.send_notification_reply(command_id, reply_text)
+                    if success:
+                        logger.info(f"Reply sent for command {command_id}")
                 root.destroy()
-                
-            btn = tk.Button(frame, text="ACKNOWLEDGE", command=close_win, bg=blue_color, fg="white", 
-                           font=("Segoe UI", 10, "bold"), relief=tk.FLAT, activebackground="#1d4ed8", activeforeground="white",
-                           cursor="hand2", padx=20, pady=8)
-            btn.pack(pady=20)
+
+            btn_frame = tk.Frame(frame, bg=bg_color)
+            tk.Button(btn_frame, text="REPLY", command=send_reply, bg=emerald_color, fg="white", 
+                      font=("Segoe UI", 9, "bold"), relief=tk.FLAT, width=15).pack(side=tk.LEFT, padx=5)
+            tk.Button(btn_frame, text="IGNORE", command=root.destroy, bg="#4b5563", fg="white", 
+                      font=("Segoe UI", 9, "bold"), relief=tk.FLAT, width=15).pack(side=tk.LEFT, padx=5)
+            btn_frame.pack(pady=15)
             
-            # focus
             root.focus_force()
             root.mainloop()
             

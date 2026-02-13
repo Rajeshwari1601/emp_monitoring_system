@@ -21,8 +21,8 @@ class Settings(BaseSettings):
     # Security
     SECRET_KEY: str = "CHANGE_THIS_SECRET_KEY_IN_PRODUCTION" 
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
-    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 52560000  # 100 years
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 36500  # 100 years
 
     def resolve_database_url(self):
         if self.DATABASE_URL:
