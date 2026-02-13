@@ -19,8 +19,30 @@ from lists_apps import get_running_applications
 from streamer import start_stream_service
 
 # Setup logging for this module
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+from logging.handlers import RotatingFileHandler
+
+# Create logger
 logger = logging.getLogger("Background")
+logger.setLevel(logging.DEBUG)
+
+# File handler
+try:
+    log_file = Config.LOG_FILE
+    log_dir = os.path.dirname(log_file)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+        
+    file_handler = RotatingFileHandler(log_file, maxBytes=10*1024*1024, backupCount=5)
+    file_handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+    logger.addHandler(file_handler)
+    
+    # Console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(logging.Formatter('%(levelname)s - %(message)s'))
+    logger.addHandler(console_handler)
+except Exception as e:
+    logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+    logger.error(f"Failed to setup file logging in background: {e}")
 
 class BackgroundService:
     def __init__(self, screen_lock=None):

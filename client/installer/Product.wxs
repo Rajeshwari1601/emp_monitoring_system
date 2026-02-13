@@ -1,0 +1,51 @@
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs" xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui">
+  <Package Name="Employee Monitoring System" 
+           Manufacturer="Employee Monitoring" 
+           Version="1.0.0.0" 
+           UpgradeCode="4f64798e-4a8e-4f81-9b1a-8e2b8c9d0123"
+           Scope="perMachine">
+    
+    <MajorUpgrade DowngradeErrorMessage="A newer version of [ProductName] is already installed." />
+
+    <MediaTemplate EmbedCab="yes" />
+
+    <UI>
+      <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchApplication" Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 and NOT Installed" />
+    </UI>
+    
+    <!-- Launch application on finish -->
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="Launch Employee Monitoring System" />
+    <Property Id="WixShellExecTarget" Value="[#MainExe]" />
+    <CustomAction Id="LaunchApplication" BinaryRef="Wix4UtilCA_X86" DllEntry="WixShellExec" Impersonate="yes" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="EmployeeMonitoring" />
+    </StandardDirectory>
+
+    <Component Id="Executable" Guid="a1b2c3d4-e5f6-4a4b-8c8d-9e0f1a2b3c4d" Directory="INSTALLFOLDER">
+      <File Id="MainExe" Source="..\dist\EmployeeMonitoring.exe" KeyPath="yes" Checksum="yes" />
+      
+      <!-- Registry entry for auto-start -->
+      <RegistryValue Root="HKLM" 
+                     Key="SOFTWARE\Microsoft\Windows\CurrentVersion\Run" 
+                     Name="EmployeeMonitoring" 
+                     Type="string" 
+                     Value="[#MainExe]" />
+      
+      <!-- Shortcut in Start Menu -->
+      <Shortcut Id="ApplicationStartMenuShortcut" 
+                Directory="ProgramMenuFolder" 
+                Name="Employee Monitoring" 
+                Description="Monitors employee activity for productivity tracking."
+                Target="[#MainExe]" 
+                WorkingDirectory="INSTALLFOLDER" />
+    </Component>
+
+    <StandardDirectory Id="ProgramMenuFolder" />
+
+    <Feature Id="MainFeature" Title="Employee Monitoring Client" Level="1">
+      <ComponentRef Id="Executable" />
+    </Feature>
+  </Package>
+</Wix>
