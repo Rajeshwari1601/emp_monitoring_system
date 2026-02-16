@@ -8,3 +8,5 @@ tk
 uiautomation
 websocket-client
 mss
+pyinstaller
+winshell

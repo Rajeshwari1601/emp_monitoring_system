@@ -2,8 +2,13 @@ import sys
 from config import Config
 from auth_ui import launch_auth_ui
 from background import BackgroundService
+from startup_manager import StartupManager
 
 def main():
+    # Ensure application starts on boot if running as EXE
+    if getattr(sys, 'frozen', False):
+        StartupManager.ensure_startup()
+
     while True:
         # Check for token
         token = Config.load_token()
