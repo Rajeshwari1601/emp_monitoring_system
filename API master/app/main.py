@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.api import api_router
@@ -70,10 +70,15 @@ async def global_exception_handler(request, exc):
 
 @app.get("/")
 def read_root():
-    # Print all registered routes for debugging
-    # for route in app.routes:
-    #    logger.info(f"ROUTE: {route.path} (Name: {route.name})")
     return {"message": "Welcome to Windows Monitoring System API"}
+
+@app.api_route("/{path_name:path}", methods=["GET", "POST", "PUT", "DELETE"])
+async def catch_all(request: Request, path_name: str):
+    logger.info(f"MISSED ROUTE: {request.method} {path_name}")
+    return JSONResponse(
+        status_code=404,
+        content={"detail": f"Route {path_name} not found", "method": request.method}
+    )
 
 # Diagnostic: Log all routes on startup
 @app.on_event("startup")

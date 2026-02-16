@@ -25,6 +25,12 @@ document.addEventListener('DOMContentLoaded', () => {
     // Re-check connection every 30s
     setInterval(checkServerConnection, 30000);
 
+    // REAL-TIME HEARTBEAT LISTENER
+    window.addEventListener('user-heartbeat', (e) => {
+        const data = e.detail;
+        handleRealTimeHeartbeat(data);
+    });
+
     const searchInput = document.getElementById('employeeSearchInput');
     if (searchInput) {
         searchInput.addEventListener('input', (e) => {
@@ -191,9 +197,8 @@ function renderUserList(allUsers, onlineUsers, filterText = '') {
     filteredUsers.forEach(user => {
         const isOnline = onlineIds.has(user.id);
         const el = document.createElement('div');
-        // Match Sidebar styling
-        // High contrast light theme sidebar items
         el.className = `px-4 py-3 cursor-pointer text-sm flex items-center justify-between group transition-colors duration-200 ${currentUserId === user.id ? 'bg-blue-50 border-l-4 border-blue-600' : 'hover:bg-gray-50 border-l-4 border-transparent'}`;
+        el.dataset.userId = user.id;
         el.onclick = () => selectUser(user, isOnline);
 
         el.innerHTML = `
@@ -652,6 +657,7 @@ function showNotifyModal() {
 }
 
 // ------ Admin Notification Toast Functions ------
+window.showAdminToast = showAdminToast;
 function showAdminToast(userName, message) {
     const toast = document.getElementById('adminNotificationToast');
     const userEl = document.getElementById('adminToastUser');
@@ -886,3 +892,46 @@ async function runApiDiagnostics() {
     alert("Diagnostics complete. View the Action Output list for results.");
 }
 
+window.handleRealTimeHeartbeat = handleRealTimeHeartbeat;
+function handleRealTimeHeartbeat(data) {
+    // data: { user_id, name, device_name }
+    const userId = data.user_id;
+
+    // Find if user is in our current online list
+    const isAlreadyOnline = onlineUsersData.some(u => u.user_id === userId);
+
+    if (!isAlreadyOnline) {
+        // Add to our local online data
+        onlineUsersData.push({
+            user_id: userId,
+            name: data.name,
+            device_name: data.device_name,
+            last_seen: Date.now()
+        });
+
+        // Re-render list to show online dot
+        const searchInput = document.getElementById('employeeSearchInput');
+        renderUserList(allUsersData, onlineUsersData, searchInput ? searchInput.value : '');
+        updateStats(onlineUsersData.length, allUsersData.length);
+    } else {
+        // Just update last seen if we were tracking it
+        const user = onlineUsersData.find(u => u.user_id === userId);
+        if (user) user.last_seen = Date.now();
+
+        // Visual feedback: brief glow on the user item in list
+        const el = document.querySelector(`#usersList div[data-user-id="${userId}"]`);
+        if (el) {
+            el.classList.add('ring-2', 'ring-green-400', 'ring-inset');
+            setTimeout(() => el.classList.remove('ring-2', 'ring-green-400', 'ring-inset'), 1000);
+        }
+    }
+
+    // If this is the currently selected user, update their detail status too
+    if (currentUserId === userId) {
+        const statusEl = document.getElementById('detailStatus');
+        if (statusEl) {
+            statusEl.textContent = 'Online';
+            statusEl.className = 'text-2xl font-extrabold text-green-600 mt-0.5';
+        }
+    }
+}

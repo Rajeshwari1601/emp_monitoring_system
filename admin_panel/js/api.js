@@ -1,8 +1,8 @@
 class APIClient {
     constructor() {
         // this.baseUrl = "http://localhost:8000/api/v1";
+        //this.baseUrl = "https://nonobstetrically-nonoptical-raymundo.ngrok-free.dev/api/v1";
         this.baseUrl = "https://empmonitoring.duckdns.org/api/v1";
-        // this.baseUrl = "https://nonobstetrically-nonoptical-raymundo.ngrok-free.dev/api/v1";
 
         this.token = localStorage.getItem('access_token');
         window.api = this;
@@ -30,7 +30,10 @@ class APIClient {
             try {
                 const data = JSON.parse(event.data);
                 if (data.type === 'NOTIFICATION_REPLY') {
-                    showAdminToast(data.user_name, data.message);
+                    if (window.showAdminToast) showAdminToast(data.user_name, data.message);
+                } else if (data.type === 'USER_ONLINE') {
+                    // Dispatch custom event for app.js to handle
+                    window.dispatchEvent(new CustomEvent('user-heartbeat', { detail: data }));
                 }
             } catch (e) {
                 console.error("Failed to parse event data:", e);

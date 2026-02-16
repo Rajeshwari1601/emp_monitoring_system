@@ -8,9 +8,9 @@ class Settings(BaseSettings):
     # Database
     POSTGRES_USER: str = "postgres"
     POSTGRES_PASSWORD: str = "1234"
-    POSTGRES_SERVER: str = "localhost"
+    POSTGRES_SERVER: str = "127.0.0.1"
     POSTGRES_PORT: str = "5432"
-    POSTGRES_DB: str = "montior_db"
+    POSTGRES_DB: str = "monitor_db"
     DATABASE_URL: Optional[str] = None
 
     # Redis
