@@ -29,7 +29,7 @@ check_redis.py
 check_routes.py
 API master/backend.log
 emp_monitor_system_doc.pdf
-client/EmployeeMonitoring.spec
-client/build/
-client/dist/
-client/icon.ico
+# client/EmployeeMonitoring.spec
+# client/build/
+# client/dist/
+# client/icon.ico

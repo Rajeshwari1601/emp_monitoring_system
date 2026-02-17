@@ -1,9 +1,57 @@
 # Employee Monitoring System - Project Specification
 
-## 1. Project Overview
-A comprehensive system to monitor employee activity on company-issued devices. The system consists of three main components: a Desktop Client (Agent), a Central Backend API, and an Admin Dashboard.
+## 2. System Architecture & Detailed Flow
 
-## 2. Technical Stack
+```mermaid
+graph TD
+    subgraph "Admin Environment"
+        Admin["Admin Dashboard (Browser)"]
+    end
+
+    subgraph "Server (FastAPI + Infrastructure)"
+        API["FastAPI Backend"]
+        DB[("PostgreSQL <br/> (Users, Logs, Commands)")]
+        Cache[("Redis <br/> (Online Status, Pub/Sub)")]
+    end
+
+    subgraph "Employee Device (Python Agent)"
+        Agent["Background Service"]
+        Streamer["Streamer Thread"]
+        Sys["Windows OS Hooks <br/> (win32, psutil)"]
+    end
+
+    %% Flow 1: Authentication & Heartbeat
+    Agent -- "1. Login / Hardware Bind" --> API
+    Agent -- "2. Heartbeat (every 10s)" --> API
+    API -- "3. Set Status (TTL 30s)" --> Cache
+
+    %% Flow 2: Command & Control
+    Admin -- "4. Trigger Command (e.g., Screenshot)" --> API
+    API -- "5. Store PENDING Command" --> DB
+    Agent -- "6. Poll Commands (every 5s)" --> API
+    API -- "7. Return PENDING Tasks" --> Agent
+    Agent -- "8. Execute Task (Worker Thread)" --> Sys
+    Agent -- "9. Upload Results (Base64/Log)" --> API
+    API -- "10. Store Result & Update Status" --> DB
+    Agent -- "11. ACK Command (EXECUTED)" --> API
+
+    %% Flow 3: Live Streaming
+    Admin -- "12. Start Live Stream" --> API
+    API -- "13. Queue Command" --> DB
+    Agent -- "14. Receive CMD & Connect WS" --> API
+    Agent -- "15. Pipe Screen Bytes (Raw)" --> API
+    API -- "16. Publish Bytes to Channel" --> Cache
+    Admin -- "17. Connect Viewer WS" --> API
+    API -- "18. Subscribe & Pipe Bytes" --> Admin
+```
+
+### Data Flow Lifecycle
+
+1.  **Presence (Heartbeat)**: Agent hits `/heartbeat` every 10s; API updates Redis (`online:{user_id}`) with a 30s TTL.
+2.  **Remote Tasks**: Admin sends command -> API stores `PENDING` in DB -> Agent polls and receives task -> Agent executes using Windows Hooks -> Agent uploads result -> API updates DB and marks as `EXECUTED`.
+3.  **Live Streaming**: Admin triggers stream -> Agent receives command and opens a WebSocket to `/ws/live` -> Agent pipes raw bytes -> API publishes to Redis Pub/Sub -> Admin connects Viewer WebSocket -> API relays bytes from Redis to Admin browser.
+
+## 3. Technical Stack
 
 ### Backend API (`API master`)
 -   **Language**: Python 3.10+
