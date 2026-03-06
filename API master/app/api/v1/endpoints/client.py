@@ -158,6 +158,7 @@ def upload_browser(
     db.add(log)
     db.commit()
     return {"success": True}
+    
 @router.post("/notification/reply", response_model=dict)
 def notify_reply(
     reply_in: client_schema.NotificationReply,
